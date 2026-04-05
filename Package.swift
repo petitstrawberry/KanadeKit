@@ -13,10 +13,13 @@ let package = Package(
             targets: ["KanadeKit"]
         ),
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/daltoniam/Starscream.git", from: "4.0.8"),
+    ],
     targets: [
         .target(
             name: "KanadeKit",
+            dependencies: [.product(name: "Starscream", package: "Starscream")],
             path: "Sources/KanadeKit"
         ),
         .testTarget(

@@ -26,14 +26,12 @@ public final class KanadeClient: @unchecked Sendable {
 
     public init(
         url: URL,
-        session: URLSession = .shared,
         reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
         heartbeatTimeout: TimeInterval = 45.0,
         requestTimeout: TimeInterval = 10.0
     ) {
         self.wsClient = WsClient(
             url: url,
-            session: session,
             reconnectPolicy: reconnectPolicy,
             heartbeatTimeout: heartbeatTimeout,
             requestTimeout: requestTimeout
