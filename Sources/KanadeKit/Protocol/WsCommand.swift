@@ -1,6 +1,6 @@
 import Foundation
 
-public enum WsCommand: Codable, Sendable, Equatable {
+enum WsCommand: Codable, Sendable, Equatable {
     case play
     case pause
     case stop
@@ -33,7 +33,7 @@ public enum WsCommand: Codable, Sendable, Equatable {
         case to
     }
 
-    public init(from decoder: Decoder) throws {
+    init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let cmd = try container.decode(String.self, forKey: .cmd)
 
@@ -83,7 +83,7 @@ public enum WsCommand: Codable, Sendable, Equatable {
         }
     }
 
-    public func encode(to encoder: Encoder) throws {
+    func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
 
         switch self {

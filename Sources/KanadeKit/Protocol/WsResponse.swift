@@ -1,6 +1,6 @@
 import Foundation
 
-public enum WsResponse: Codable, Sendable, Equatable {
+enum WsResponse: Codable, Sendable, Equatable {
     case albums([Album])
     case albumTracks([Track])
     case artists([String])
@@ -36,7 +36,7 @@ public enum WsResponse: Codable, Sendable, Equatable {
         }
     }
 
-    public init(from decoder: Decoder) throws {
+    init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKeys.self)
 
         guard let key = container.allKeys.first else {
@@ -70,7 +70,7 @@ public enum WsResponse: Codable, Sendable, Equatable {
         }
     }
 
-    public func encode(to encoder: Encoder) throws {
+    func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: DynamicCodingKeys.self)
 
         switch self {

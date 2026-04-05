@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import os
 
-public protocol WsClientDelegate: AnyObject, Sendable {
+protocol WsClientDelegate: AnyObject, Sendable {
     func clientDidConnect(_ client: WsClient)
     func clientDidDisconnect(_ client: WsClient, error: (any Error)?)
     func client(_ client: WsClient, didUpdateState state: PlaybackState)
@@ -12,9 +12,9 @@ public protocol WsClientDelegate: AnyObject, Sendable {
 extension WsClient: @unchecked Sendable {}
 
 @Observable
-public final class WsClient {
-    public private(set) var state: PlaybackState?
-    public private(set) var connected: Bool = false
+final class WsClient {
+    private(set) var state: PlaybackState?
+    private(set) var connected: Bool = false
 
     private struct QueuedMessage: Sendable {
         let data: Data
@@ -44,7 +44,7 @@ public final class WsClient {
     @ObservationIgnored private let requestTimeout: TimeInterval
     @ObservationIgnored private let heartbeat: HeartbeatMonitor
 
-    @ObservationIgnored public weak var delegate: (any WsClientDelegate)?
+    @ObservationIgnored weak var delegate: (any WsClientDelegate)?
 
     @ObservationIgnored private let internalState = OSAllocatedUnfairLock(initialState: InternalState())
     @ObservationIgnored private let pendingRequestsLock = OSAllocatedUnfairLock(
@@ -52,7 +52,7 @@ public final class WsClient {
     )
     @ObservationIgnored private let sendQueueLock = OSAllocatedUnfairLock(initialState: [QueuedMessage]())
 
-    public init(
+    init(
         url: URL,
         session: URLSession = .shared,
         reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
@@ -99,7 +99,7 @@ public final class WsClient {
         }
     }
 
-    public func connect() {
+    func connect() {
         let shouldStart = internalState.withLock { state -> Bool in
             guard !state.active else { return false }
             state.active = true
@@ -110,7 +110,7 @@ public final class WsClient {
         startConnection()
     }
 
-    public func disconnect() {
+    func disconnect() {
         let teardown = internalState.withLock { state -> (ConnectionResources, Task<Void, Never>?, Bool) in
             let hadConnection = state.active || state.wsTask != nil || state.receiveTask != nil || state.heartbeatTask != nil || state.readyToSend
             state.active = false
@@ -149,12 +149,12 @@ public final class WsClient {
         }
     }
 
-    public func send(_ command: WsCommand) {
+    func send(_ command: WsCommand) {
         enqueueSend(.command(command), requestId: nil)
     }
 
     @discardableResult
-    public func request(_ request: WsRequest) async throws -> WsResponse {
+    func request(_ request: WsRequest) async throws -> WsResponse {
         let reqId = internalState.withLock { state -> UInt64 in
             let reqId = state.nextReqId
             state.nextReqId &+= 1

@@ -1,6 +1,6 @@
 import Foundation
 
-public enum WsRequest: Codable, Sendable, Equatable {
+enum WsRequest: Codable, Sendable, Equatable {
     case getAlbums
     case getAlbumTracks(albumId: String)
     case getArtists
@@ -20,7 +20,7 @@ public enum WsRequest: Codable, Sendable, Equatable {
         case query
     }
 
-    public init(from decoder: Decoder) throws {
+    init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let req = try container.decode(String.self, forKey: .req)
 
@@ -50,7 +50,7 @@ public enum WsRequest: Codable, Sendable, Equatable {
         }
     }
 
-    public func encode(to encoder: Encoder) throws {
+    func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
 
         switch self {

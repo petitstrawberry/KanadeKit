@@ -1,6 +1,6 @@
 import Foundation
 
-public enum ClientMessage: Codable, Sendable, Equatable {
+enum ClientMessage: Codable, Sendable, Equatable {
     case command(WsCommand)
     case request(reqId: UInt64, request: WsRequest)
 
@@ -24,7 +24,7 @@ public enum ClientMessage: Codable, Sendable, Equatable {
         case query
     }
 
-    public init(from decoder: Decoder) throws {
+    init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
         if container.contains(.cmd) {
@@ -136,7 +136,7 @@ public enum ClientMessage: Codable, Sendable, Equatable {
         throw KanadeError.unknownMessageType("missing cmd or req_id, got: [\(keys)]")
     }
 
-    public func encode(to encoder: Encoder) throws {
+    func encode(to encoder: Encoder) throws {
         switch self {
         case .command(let command):
             try command.encode(to: encoder)

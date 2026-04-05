@@ -1,6 +1,6 @@
 import Foundation
 
-public enum ServerMessage: Codable, Sendable, Equatable {
+enum ServerMessage: Codable, Sendable, Equatable {
     case state(PlaybackState)
     case response(reqId: UInt64, response: WsResponse)
 
@@ -11,7 +11,7 @@ public enum ServerMessage: Codable, Sendable, Equatable {
         case data
     }
 
-    public init(from decoder: Decoder) throws {
+    init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(String.self, forKey: .type)
 
@@ -28,7 +28,7 @@ public enum ServerMessage: Codable, Sendable, Equatable {
         }
     }
 
-    public func encode(to encoder: Encoder) throws {
+    func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
 
         switch self {

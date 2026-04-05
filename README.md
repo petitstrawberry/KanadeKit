@@ -1,0 +1,187 @@
+# KanadeKit
+
+Swift client for the [Kanade](https://github.com/petitstrawberry/kanade) music player protocol. Zero dependencies, pure Foundation.
+
+## Requirements
+
+- Swift 6.2+
+- iOS 26+ / macOS 26+
+
+## Add to Your Project
+
+```swift
+// Package.swift
+dependencies: [
+    .package(url: "https://github.com/petitstrawberry/KanadeKit.git", branch: "main"),
+],
+targets: [
+    .target(name: "YourApp", dependencies: ["KanadeKit"]),
+]
+```
+
+## Quick Start
+
+```swift
+import KanadeKit
+
+let client = KanadeClient(url: URL(string: "ws://192.168.1.10:8080")!)
+client.connect()
+
+// SwiftUI
+// @State var client = KanadeClient(url: ...)
+// client.state?.queue          // [Track]
+// client.state?.shuffle        // Bool
+// client.state?.repeatMode     // RepeatMode
+// client.connected             // Bool
+
+// Playback
+client.play()
+client.pause()
+client.next()
+client.previous()
+client.seek(to: 30.0)
+client.setVolume(75)
+client.setRepeat(.all)
+client.setShuffle(true)
+
+// Queue
+client.addToQueue(track)
+client.addTracksToQueue([track1, track2])
+client.removeFromQueue(2)
+client.moveInQueue(from: 0, to: 3)
+client.clearQueue()
+client.replaceAndPlay(tracks: playlist, index: 0)
+
+// Library queries — return concrete types
+let albums = try await client.getAlbums()
+let tracks = try await client.getAlbumTracks(albumId: "abc")
+let artists = try await client.getArtists()
+let results = try await client.search("Neru")
+let (queue, currentIndex) = try await client.getQueue()
+
+// Media
+let media = MediaClient(baseURL: URL(string: "http://192.168.1.10:8081")!)
+let artworkData = try await media.artwork(albumId: "abc123")
+let trackUrl = media.trackURL(trackId: "def456") // feed to AVPlayer
+```
+
+## API
+
+### KanadeClient
+
+```swift
+let client = KanadeClient(
+    url: URL(string: "ws://host:8080")!,
+    reconnectPolicy: ReconnectPolicy(),      // 3s initial, 5s cap
+    heartbeatTimeout: 45.0,                   // receive timeout
+    requestTimeout: 10.0                      // per-request timeout
+)
+
+client.connect()
+client.disconnect()
+```
+
+**Playback**
+
+| Method | Description |
+|---|---|
+| `play()` | Start / resume |
+| `pause()` | Pause |
+| `stop()` | Stop |
+| `next()` | Next track |
+| `previous()` | Previous track |
+| `seek(to: Double)` | Seek to position (seconds) |
+| `setVolume(_ Int)` | Volume 0–100 |
+| `setRepeat(_ RepeatMode)` | `.off`, `.one`, `.all` |
+| `setShuffle(_ Bool)` | Toggle shuffle |
+
+**Queue**
+
+| Method | Description |
+|---|---|
+| `addToQueue(_ Track)` | Add single track |
+| `addTracksToQueue(_ [Track])` | Add multiple tracks |
+| `playIndex(_ Int)` | Play track at index |
+| `removeFromQueue(_ Int)` | Remove at index |
+| `moveInQueue(from: Int, to: Int)` | Reorder |
+| `clearQueue()` | Clear all |
+| `replaceAndPlay(tracks: [Track], index: Int)` | Replace queue and play |
+
+**Library Queries** — all return concrete types, no enum unwrapping needed.
+
+| Method | Returns |
+|---|---|
+| `getAlbums()` | `[Album]` |
+| `getAlbumTracks(albumId:)` | `[Track]` |
+| `getArtists()` | `[String]` |
+| `getArtistAlbums(artist:)` | `[Album]` |
+| `getArtistTracks(artist:)` | `[Track]` |
+| `getGenres()` | `[String]` |
+| `getGenreAlbums(genre:)` | `[Album]` |
+| `getGenreTracks(genre:)` | `[Track]` |
+| `search(_ query:)` | `[Track]` |
+| `getQueue()` | `(tracks: [Track], currentIndex: Int?)` |
+
+**Node Selection**
+
+| Method | Description |
+|---|---|
+| `selectNode(_ String)` | Select output node by ID |
+
+**Observable State** (SwiftUI-ready)
+
+```swift
+client.state?.nodes          // [Node]
+client.state?.queue          // [Track]
+client.state?.selectedNodeId // String?
+client.state?.currentIndex   // Int?
+client.state?.shuffle        // Bool
+client.state?.repeatMode     // RepeatMode
+client.connected             // Bool
+```
+
+### KanadeClientDelegate
+
+For non-SwiftUI consumers. All methods have empty default implementations.
+
+```swift
+class MyDelegate: KanadeClientDelegate {
+    func clientDidConnect(_ client: KanadeClient) { }
+    func clientDidDisconnect(_ client: KanadeClient, error: Error?) { }
+    func client(_ client: KanadeClient, didUpdateState state: PlaybackState) { }
+    func client(_ client: KanadeClient, didReceiveError error: Error) { }
+}
+client.delegate = MyDelegate()
+```
+
+### MediaClient
+
+```swift
+let media = MediaClient(baseURL: URL(string: "http://host:8081")!)
+
+// Track URL for AVPlayer (handles Range automatically)
+let url = media.trackURL(trackId: "track-id")
+
+// Artwork data
+let data = try await media.artwork(albumId: "album-id")
+
+// Raw range request
+let (audio, response) = try await media.trackData(trackId: "track-id", range: 0..<1024)
+```
+
+### Models
+
+| Type | Fields |
+|---|---|
+| `Track` | id, filePath, albumId, title, artist, albumArtist, albumTitle, composer, genre, trackNumber, discNumber, durationSecs, format, sampleRate |
+| `Album` | id, dirPath, title, artworkPath |
+| `Node` | id, name, connected, status, positionSecs, volume |
+| `PlaybackState` | nodes, selectedNodeId, queue, currentIndex, shuffle, repeatMode |
+| `PlaybackStatus` | stopped, playing, paused, loading |
+| `RepeatMode` | off, one, all |
+
+All models are `Codable`, `Sendable`, `Equatable`, `Hashable`.
+
+## License
+
+MIT
