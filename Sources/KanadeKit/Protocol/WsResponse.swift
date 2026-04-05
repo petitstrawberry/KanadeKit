@@ -26,6 +26,10 @@ enum WsResponse: Codable, Sendable, Equatable {
         }
     }
 
+    private struct NestedAlbums: Codable, Sendable, Equatable { let albums: [Album] }
+    private struct NestedTracks: Codable, Sendable, Equatable { let tracks: [Track] }
+    private struct NestedArtists: Codable, Sendable, Equatable { let artists: [String] }
+    private struct NestedGenres: Codable, Sendable, Equatable { let genres: [String] }
     private struct QueueData: Codable, Sendable, Equatable {
         let tracks: [Track]
         let currentIndex: Int?
@@ -45,23 +49,32 @@ enum WsResponse: Codable, Sendable, Equatable {
 
         switch key.stringValue {
         case "albums":
-            self = .albums(try container.decode([Album].self, forKey: key))
+            let nested = try container.decode(NestedAlbums.self, forKey: key)
+            self = .albums(nested.albums)
         case "album_tracks":
-            self = .albumTracks(try container.decode([Track].self, forKey: key))
+            let nested = try container.decode(NestedTracks.self, forKey: key)
+            self = .albumTracks(nested.tracks)
         case "artists":
-            self = .artists(try container.decode([String].self, forKey: key))
+            let nested = try container.decode(NestedArtists.self, forKey: key)
+            self = .artists(nested.artists)
         case "artist_albums":
-            self = .artistAlbums(try container.decode([Album].self, forKey: key))
+            let nested = try container.decode(NestedAlbums.self, forKey: key)
+            self = .artistAlbums(nested.albums)
         case "artist_tracks":
-            self = .artistTracks(try container.decode([Track].self, forKey: key))
+            let nested = try container.decode(NestedTracks.self, forKey: key)
+            self = .artistTracks(nested.tracks)
         case "genres":
-            self = .genres(try container.decode([String].self, forKey: key))
+            let nested = try container.decode(NestedGenres.self, forKey: key)
+            self = .genres(nested.genres)
         case "genre_albums":
-            self = .genreAlbums(try container.decode([Album].self, forKey: key))
+            let nested = try container.decode(NestedAlbums.self, forKey: key)
+            self = .genreAlbums(nested.albums)
         case "genre_tracks":
-            self = .genreTracks(try container.decode([Track].self, forKey: key))
+            let nested = try container.decode(NestedTracks.self, forKey: key)
+            self = .genreTracks(nested.tracks)
         case "search_results":
-            self = .searchResults(try container.decode([Track].self, forKey: key))
+            let nested = try container.decode(NestedTracks.self, forKey: key)
+            self = .searchResults(nested.tracks)
         case "queue":
             let queueData = try container.decode(QueueData.self, forKey: key)
             self = .queue(tracks: queueData.tracks, currentIndex: queueData.currentIndex)
@@ -75,23 +88,23 @@ enum WsResponse: Codable, Sendable, Equatable {
 
         switch self {
         case .albums(let albums):
-            try container.encode(albums, forKey: DynamicCodingKeys(stringValue: "albums")!)
+            try container.encode(NestedAlbums(albums: albums), forKey: DynamicCodingKeys(stringValue: "albums")!)
         case .albumTracks(let tracks):
-            try container.encode(tracks, forKey: DynamicCodingKeys(stringValue: "album_tracks")!)
+            try container.encode(NestedTracks(tracks: tracks), forKey: DynamicCodingKeys(stringValue: "album_tracks")!)
         case .artists(let artists):
-            try container.encode(artists, forKey: DynamicCodingKeys(stringValue: "artists")!)
+            try container.encode(NestedArtists(artists: artists), forKey: DynamicCodingKeys(stringValue: "artists")!)
         case .artistAlbums(let albums):
-            try container.encode(albums, forKey: DynamicCodingKeys(stringValue: "artist_albums")!)
+            try container.encode(NestedAlbums(albums: albums), forKey: DynamicCodingKeys(stringValue: "artist_albums")!)
         case .artistTracks(let tracks):
-            try container.encode(tracks, forKey: DynamicCodingKeys(stringValue: "artist_tracks")!)
+            try container.encode(NestedTracks(tracks: tracks), forKey: DynamicCodingKeys(stringValue: "artist_tracks")!)
         case .genres(let genres):
-            try container.encode(genres, forKey: DynamicCodingKeys(stringValue: "genres")!)
+            try container.encode(NestedGenres(genres: genres), forKey: DynamicCodingKeys(stringValue: "genres")!)
         case .genreAlbums(let albums):
-            try container.encode(albums, forKey: DynamicCodingKeys(stringValue: "genre_albums")!)
+            try container.encode(NestedAlbums(albums: albums), forKey: DynamicCodingKeys(stringValue: "genre_albums")!)
         case .genreTracks(let tracks):
-            try container.encode(tracks, forKey: DynamicCodingKeys(stringValue: "genre_tracks")!)
+            try container.encode(NestedTracks(tracks: tracks), forKey: DynamicCodingKeys(stringValue: "genre_tracks")!)
         case .searchResults(let tracks):
-            try container.encode(tracks, forKey: DynamicCodingKeys(stringValue: "search_results")!)
+            try container.encode(NestedTracks(tracks: tracks), forKey: DynamicCodingKeys(stringValue: "search_results")!)
         case .queue(let tracks, let currentIndex):
             try container.encode(
                 QueueData(tracks: tracks, currentIndex: currentIndex),

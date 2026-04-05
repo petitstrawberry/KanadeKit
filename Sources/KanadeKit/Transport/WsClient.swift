@@ -25,7 +25,7 @@ final class WsClient: @unchecked Sendable {
     nonisolated(unsafe) private var _socket: WebSocket?
     nonisolated(unsafe) private var _reconnectTask: Task<Void, Never>?
     private var _retryCount: Int = 0
-    private var _nextReqId: UInt64 = 0
+    private let reqIdLock = OSAllocatedUnfairLock(initialState: UInt64(0))
     private var _active: Bool = false
 
     @ObservationIgnored private let url: URL
@@ -104,8 +104,7 @@ final class WsClient: @unchecked Sendable {
 
     @discardableResult
     func request(_ request: WsRequest) async throws -> WsResponse {
-        let reqId: UInt64
-        (reqId, _nextReqId) = (_nextReqId, _nextReqId &+ 1)
+        let reqId = nextReqId()
 
         return try await withCheckedThrowingContinuation { continuation in
             let timeoutTask = Task { [weak self] in
@@ -156,13 +155,26 @@ final class WsClient: @unchecked Sendable {
 
     private func handleEvent(_ event: WebSocketEvent) {
         switch event {
+        case .text(let string):
+            print("[WsClient] .text \(string.prefix(100))")
+        case .binary(let data):
+            print("[WsClient] .binary \(data.count) bytes")
+        case .error(let error):
+            print("[WsClient] .error \(String(describing: error))")
+        case .disconnected(let reason, let code):
+            print("[WsClient] .disconnected reason=\(String(describing: reason)) code=\(String(describing: code))")
+        case .peerClosed:
+            print("[WsClient] .peerClosed")
+        default:
+            break
+        }
+        switch event {
         case .connected:
             heartbeat.reset()
             _retryCount = 0
             _reconnectTask = nil
 
-            let reqId: UInt64
-            (reqId, _nextReqId) = (_nextReqId, _nextReqId &+ 1)
+            let reqId = nextReqId()
 
             if let data = try? encoder.encode(ClientMessage.request(reqId: reqId, request: .getQueue)),
                let string = String(data: data, encoding: .utf8) {
@@ -233,11 +245,24 @@ final class WsClient: @unchecked Sendable {
     private func handleDataMessage(_ data: Data) {
         do {
             let message = try decoder.decode(ServerMessage.self, from: data)
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.handleServerMessage(message)
+            switch message {
+            case .state(let state):
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.state = state
+                    self.connected = true
+                    self.delegate?.client(self, didUpdateState: state)
+                }
+            case .response(let reqId, let response):
+                let removed = pendingRequestsLock.withLock { pending -> PendingRequest? in
+                    pending.removeValue(forKey: reqId)
+                }
+                removed?.timeoutTask?.cancel()
+                removed?.continuation.resume(returning: response)
             }
         } catch {
+            let msg = String(decoding: data, as: UTF8.self)
+            print("[WsClient] decode error for \(msg.prefix(200)): \(error)")
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.delegate?.client(self, didReceiveError: KanadeError.decodeFailed(underlying: error))
@@ -252,13 +277,19 @@ final class WsClient: @unchecked Sendable {
             self.state = state
             self.connected = true
             self.delegate?.client(self, didUpdateState: state)
-
         case .response(let reqId, let response):
             let removed = pendingRequestsLock.withLock { pending -> PendingRequest? in
                 pending.removeValue(forKey: reqId)
             }
             removed?.timeoutTask?.cancel()
             removed?.continuation.resume(returning: response)
+        }
+    }
+
+    private func nextReqId() -> UInt64 {
+        reqIdLock.withLock { id in
+            id &+= 1
+            return id
         }
     }
 
