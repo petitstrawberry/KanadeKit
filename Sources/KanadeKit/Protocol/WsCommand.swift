@@ -18,14 +18,22 @@ enum WsCommand: Codable, Sendable, Equatable {
     case moveInQueue(from: Int, to: Int)
     case clearQueue
     case replaceAndPlay(tracks: [Track], index: Int)
+    case localSessionStart(deviceName: String)
+    case localSessionStop
+    case localSessionUpdate(queue: [Track], currentIndex: Int?, positionSecs: Double, status: PlaybackStatus, volume: Int, repeatMode: RepeatMode, shuffle: Bool)
+    case handoff(fromNodeId: String, toNodeId: String)
 
     private enum CodingKeys: String, CodingKey {
         case cmd
+        case deviceName = "device_name"
         case positionSecs = "position_secs"
+        case status
         case volume
         case repeatMode = "repeat"
         case shuffle
+        case fromNodeId = "from_node_id"
         case nodeId = "node_id"
+        case toNodeId = "to_node_id"
         case track
         case tracks
         case index
@@ -77,6 +85,32 @@ enum WsCommand: Codable, Sendable, Equatable {
             self = .replaceAndPlay(
                 tracks: try container.decode([Track].self, forKey: .tracks),
                 index: try container.decode(Int.self, forKey: .index)
+            )
+        case "local_session_start":
+            self = .localSessionStart(deviceName: try container.decode(String.self, forKey: .deviceName))
+        case "local_session_stop":
+            self = .localSessionStop
+        case "local_session_update":
+            let queue = try container.decode([Track].self, forKey: .tracks)
+            let currentIndex = try container.decodeIfPresent(Int.self, forKey: .index)
+            let positionSecs = try container.decode(Double.self, forKey: .positionSecs)
+            let status = try container.decode(PlaybackStatus.self, forKey: .status)
+            let volume = try container.decode(Int.self, forKey: .volume)
+            let repeatMode = try container.decode(RepeatMode.self, forKey: .repeatMode)
+            let shuffle = try container.decode(Bool.self, forKey: .shuffle)
+            self = .localSessionUpdate(
+                queue: queue,
+                currentIndex: currentIndex,
+                positionSecs: positionSecs,
+                status: status,
+                volume: volume,
+                repeatMode: repeatMode,
+                shuffle: shuffle
+            )
+        case "handoff":
+            self = .handoff(
+                fromNodeId: try container.decode(String.self, forKey: .fromNodeId),
+                toNodeId: try container.decode(String.self, forKey: .toNodeId)
             )
         default:
             throw KanadeError.unknownCommand(cmd)
@@ -134,6 +168,24 @@ enum WsCommand: Codable, Sendable, Equatable {
             try container.encode("replace_and_play", forKey: .cmd)
             try container.encode(tracks, forKey: .tracks)
             try container.encode(index, forKey: .index)
+        case .localSessionStart(let deviceName):
+            try container.encode("local_session_start", forKey: .cmd)
+            try container.encode(deviceName, forKey: .deviceName)
+        case .localSessionStop:
+            try container.encode("local_session_stop", forKey: .cmd)
+        case .localSessionUpdate(let queue, let currentIndex, let positionSecs, let status, let volume, let repeatMode, let shuffle):
+            try container.encode("local_session_update", forKey: .cmd)
+            try container.encode(queue, forKey: .tracks)
+            try container.encodeIfPresent(currentIndex, forKey: .index)
+            try container.encode(positionSecs, forKey: .positionSecs)
+            try container.encode(status, forKey: .status)
+            try container.encode(volume, forKey: .volume)
+            try container.encode(repeatMode, forKey: .repeatMode)
+            try container.encode(shuffle, forKey: .shuffle)
+        case .handoff(let fromNodeId, let toNodeId):
+            try container.encode("handoff", forKey: .cmd)
+            try container.encode(fromNodeId, forKey: .fromNodeId)
+            try container.encode(toNodeId, forKey: .toNodeId)
         }
     }
 }

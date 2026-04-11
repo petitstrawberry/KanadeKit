@@ -12,3 +12,8 @@ public enum RepeatMode: String, Codable, Sendable, Equatable, Hashable {
     case one
     case all
 }
+
+public enum NodeType: String, Codable, Sendable, Equatable, Hashable {
+    case remote
+    case local
+}
