@@ -12,6 +12,7 @@ public struct Node: Codable, Sendable, Equatable, Hashable, Identifiable {
     public let volume: Int
     public let repeatMode: RepeatMode?
     public let shuffle: Bool?
+    public let deviceId: String?
 
     public init(
         id: String,
@@ -24,7 +25,8 @@ public struct Node: Codable, Sendable, Equatable, Hashable, Identifiable {
         positionSecs: Double,
         volume: Int,
         repeatMode: RepeatMode? = nil,
-        shuffle: Bool? = nil
+        shuffle: Bool? = nil,
+        deviceId: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -37,6 +39,7 @@ public struct Node: Codable, Sendable, Equatable, Hashable, Identifiable {
         self.volume = volume
         self.repeatMode = repeatMode
         self.shuffle = shuffle
+        self.deviceId = deviceId
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -51,5 +54,6 @@ public struct Node: Codable, Sendable, Equatable, Hashable, Identifiable {
         case volume
         case repeatMode = "repeat"
         case shuffle
+        case deviceId = "device_id"
     }
 }

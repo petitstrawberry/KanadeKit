@@ -18,7 +18,7 @@ enum WsCommand: Codable, Sendable, Equatable {
     case moveInQueue(from: Int, to: Int)
     case clearQueue
     case replaceAndPlay(tracks: [Track], index: Int)
-    case localSessionStart(deviceName: String)
+    case localSessionStart(deviceName: String, deviceId: String?)
     case localSessionStop
     case localSessionUpdate(queue: [Track], currentIndex: Int?, positionSecs: Double, status: PlaybackStatus, volume: Int, repeatMode: RepeatMode, shuffle: Bool)
     case handoff(fromNodeId: String, toNodeId: String)
@@ -26,6 +26,7 @@ enum WsCommand: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case cmd
         case deviceName = "device_name"
+        case deviceId = "device_id"
         case positionSecs = "position_secs"
         case status
         case volume
@@ -86,8 +87,10 @@ enum WsCommand: Codable, Sendable, Equatable {
                 tracks: try container.decode([Track].self, forKey: .tracks),
                 index: try container.decode(Int.self, forKey: .index)
             )
-        case "local_session_start":
-            self = .localSessionStart(deviceName: try container.decode(String.self, forKey: .deviceName))
+         case "local_session_start":
+            let deviceName = try container.decode(String.self, forKey: .deviceName)
+            let deviceId = try container.decodeIfPresent(String.self, forKey: .deviceId)
+            self = .localSessionStart(deviceName: deviceName, deviceId: deviceId)
         case "local_session_stop":
             self = .localSessionStop
         case "local_session_update":
@@ -168,9 +171,10 @@ enum WsCommand: Codable, Sendable, Equatable {
             try container.encode("replace_and_play", forKey: .cmd)
             try container.encode(tracks, forKey: .tracks)
             try container.encode(index, forKey: .index)
-        case .localSessionStart(let deviceName):
+         case .localSessionStart(let deviceName, let deviceId):
             try container.encode("local_session_start", forKey: .cmd)
             try container.encode(deviceName, forKey: .deviceName)
+            try container.encodeIfPresent(deviceId, forKey: .deviceId)
         case .localSessionStop:
             try container.encode("local_session_stop", forKey: .cmd)
         case .localSessionUpdate(let queue, let currentIndex, let positionSecs, let status, let volume, let repeatMode, let shuffle):
