@@ -19,7 +19,9 @@ public struct MediaAuth: Sendable, Equatable {
             .expires: NSDate(timeIntervalSinceNow: 86400),
         ]
         if let cookie = HTTPCookie(properties: properties) {
-            HTTPCookieStorage.shared.setCookie(cookie)
+            DispatchQueue.global(qos: .utility).async {
+                HTTPCookieStorage.shared.setCookie(cookie)
+            }
         }
     }
 
@@ -28,10 +30,12 @@ public struct MediaAuth: Sendable, Equatable {
     }
 
     public static func clearCookie(host: String) {
-        let storage = HTTPCookieStorage.shared
-        if let cookies = storage.cookies {
-            for cookie in cookies where cookie.name == "kanade_session" && cookie.domain == host {
-                storage.deleteCookie(cookie)
+        DispatchQueue.global(qos: .utility).async {
+            let storage = HTTPCookieStorage.shared
+            if let cookies = storage.cookies {
+                for cookie in cookies where cookie.name == "kanade_session" && cookie.domain == host {
+                    storage.deleteCookie(cookie)
+                }
             }
         }
     }
