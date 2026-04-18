@@ -39,6 +39,24 @@ public actor MediaAuthSigner {
         cache.removeValue(forKey: Self.normalize(path: path))
     }
 
+    public func prefetch(paths: [String]) async {
+        let normalized = paths.map { Self.normalize(path: $0) }
+        let now = Date()
+        let missing = normalized.filter { cache[$0]?.isValid(at: now) != true }
+        guard !missing.isEmpty else { return }
+
+        do {
+            let signedURLs = try await signURLs(missing)
+            for path in missing {
+                guard let signedURL = signedURLs[path] else { continue }
+                let expiry = try? Self.expiryDate(from: signedURL)
+                if let expiry, expiry > now.addingTimeInterval(1) {
+                    cache[path] = CachedSignedURL(url: signedURL, expiry: expiry)
+                }
+            }
+        } catch {}
+    }
+
     public func clear() {
         cache.removeAll()
         let pending = pendingContinuations

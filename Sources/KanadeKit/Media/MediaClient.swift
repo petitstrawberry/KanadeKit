@@ -243,7 +243,7 @@ public final class MediaClient: @unchecked Sendable {
         return baseURL.appending(path: normalizedPath)
     }
 
-    private func mediaAuthSignerReference() -> MediaAuthSigner? {
+    public func mediaAuthSignerReference() -> MediaAuthSigner? {
         stateLock.lock()
         let signer = mediaAuthSigner
         stateLock.unlock()
