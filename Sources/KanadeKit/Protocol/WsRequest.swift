@@ -11,6 +11,7 @@ enum WsRequest: Codable, Sendable, Equatable {
     case getGenreTracks(genre: String)
     case search(query: String)
     case getQueue
+    case signURLs(paths: [String])
 
     private enum CodingKeys: String, CodingKey {
         case req
@@ -18,6 +19,7 @@ enum WsRequest: Codable, Sendable, Equatable {
         case artist
         case genre
         case query
+        case paths
     }
 
     init(from decoder: Decoder) throws {
@@ -45,6 +47,8 @@ enum WsRequest: Codable, Sendable, Equatable {
             self = .search(query: try container.decode(String.self, forKey: .query))
         case "get_queue":
             self = .getQueue
+        case "sign_urls":
+            self = .signURLs(paths: try container.decode([String].self, forKey: .paths))
         default:
             throw KanadeError.unknownRequest(req)
         }
@@ -80,6 +84,9 @@ enum WsRequest: Codable, Sendable, Equatable {
             try container.encode(query, forKey: .query)
         case .getQueue:
             try container.encode("get_queue", forKey: .req)
+        case .signURLs(let paths):
+            try container.encode("sign_urls", forKey: .req)
+            try container.encode(paths, forKey: .paths)
         }
     }
 }

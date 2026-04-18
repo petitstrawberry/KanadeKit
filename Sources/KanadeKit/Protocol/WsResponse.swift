@@ -11,6 +11,7 @@ enum WsResponse: Codable, Sendable, Equatable {
     case genreTracks([Track])
     case searchResults([Track])
     case queue(tracks: [Track], currentIndex: Int?)
+    case signedURLs([String: String])
 
     private struct DynamicCodingKeys: CodingKey {
         var stringValue: String
@@ -37,6 +38,14 @@ enum WsResponse: Codable, Sendable, Equatable {
         private enum CodingKeys: String, CodingKey {
             case tracks
             case currentIndex = "current_index"
+        }
+    }
+
+    private struct SignedURLsData: Codable, Sendable, Equatable {
+        let urls: [String: String]
+
+        private enum CodingKeys: String, CodingKey {
+            case urls
         }
     }
 
@@ -78,6 +87,9 @@ enum WsResponse: Codable, Sendable, Equatable {
         case "queue":
             let queueData = try container.decode(QueueData.self, forKey: key)
             self = .queue(tracks: queueData.tracks, currentIndex: queueData.currentIndex)
+        case "signed_urls":
+            let nested = try container.decode(SignedURLsData.self, forKey: key)
+            self = .signedURLs(nested.urls)
         default:
             throw KanadeError.unknownResponse(key.stringValue)
         }
@@ -109,6 +121,11 @@ enum WsResponse: Codable, Sendable, Equatable {
             try container.encode(
                 QueueData(tracks: tracks, currentIndex: currentIndex),
                 forKey: DynamicCodingKeys(stringValue: "queue")!
+            )
+        case .signedURLs(let signedURLs):
+            try container.encode(
+                SignedURLsData(urls: signedURLs),
+                forKey: DynamicCodingKeys(stringValue: "signed_urls")!
             )
         }
     }

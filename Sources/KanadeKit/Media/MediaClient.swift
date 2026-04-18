@@ -11,7 +11,7 @@ public final class MediaClient: @unchecked Sendable {
     private let session: URLSession
     private let cacheStore: TrackByteCacheStore
     private let stateLock = NSLock()
-    private var mediaAuth: MediaAuth?
+    private var mediaAuthSigner: MediaAuthSigner?
 
     public init(baseURL: URL, session: URLSession = .shared) {
         self.baseURL = baseURL.hasDirectoryPath ? baseURL : baseURL.deletingLastPathComponent()
@@ -31,8 +31,8 @@ public final class MediaClient: @unchecked Sendable {
         let session: URLSession
         if let tlsConfig = tlsConfiguration, let identity = tlsConfig.clientIdentity {
             let config = URLSessionConfiguration.default
-            config.httpCookieStorage = HTTPCookieStorage.shared
-            config.httpShouldSetCookies = true
+            config.httpCookieStorage = nil
+            config.httpShouldSetCookies = false
             config.urlCredentialStorage = nil
             let credential = URLCredential(identity: identity, certificates: nil, persistence: .forSession)
             session = URLSession(configuration: config, delegate: ClientCertDelegate(credential: credential), delegateQueue: nil)
@@ -42,22 +42,22 @@ public final class MediaClient: @unchecked Sendable {
         self.init(baseURL: url, session: session)
     }
 
-    public func setMediaAuthKey(_ keyId: String, host: String) {
-        let auth = MediaAuth(keyId: keyId, host: host)
-        auth.setCookie()
+    public func setMediaAuthSigner(_ signer: MediaAuthSigner) {
         stateLock.lock()
-        mediaAuth = auth
+        mediaAuthSigner = signer
         stateLock.unlock()
     }
 
-    public func clearMediaAuth() {
+    public func clearMediaAuthSigner() {
         stateLock.lock()
-        let auth = mediaAuth
-        mediaAuth = nil
+        let signer = mediaAuthSigner
+        mediaAuthSigner = nil
         stateLock.unlock()
 
-        if let auth {
-            MediaAuth.clearCookie(host: auth.host)
+        if let signer {
+            Task {
+                await signer.clear()
+            }
         }
     }
 
@@ -66,17 +66,11 @@ public final class MediaClient: @unchecked Sendable {
     }
 
     public func artwork(albumId: String) async throws -> Data {
-        let url = baseURL.appendingPathComponent("media/art/\(albumId)")
-        var request = URLRequest(url: url)
-        applyMediaAuth(to: &request)
-        let (data, response) = try await session.data(for: request)
+        let path = mediaPath("art/\(albumId)")
+        let (data, response) = try await performDataRequest(path: path)
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw KanadeError.httpError(statusCode: -1)
-        }
-
-        guard (200...299).contains(httpResponse.statusCode) else {
-            throw KanadeError.httpError(statusCode: httpResponse.statusCode)
+        guard (200...299).contains(response.statusCode) else {
+            throw KanadeError.httpError(statusCode: response.statusCode)
         }
 
         return data
@@ -116,15 +110,15 @@ public final class MediaClient: @unchecked Sendable {
     }
 
     public func readCachedTrackBytes(trackId: String, range: Range<Int64>) throws -> Data {
-        return try cacheStore.read(trackId: trackId, range: range)
+        try cacheStore.read(trackId: trackId, range: range)
     }
 
     public func trackContentInfo(trackId: String) throws -> TrackByteCacheContentInfo {
-        return try cacheStore.contentInfo(for: trackId)
+        try cacheStore.contentInfo(for: trackId)
     }
 
     public func trackByteCacheSnapshot(trackId: String) throws -> TrackByteCacheSnapshot {
-        return try cacheStore.snapshot(for: trackId)
+        try cacheStore.snapshot(for: trackId)
     }
 
     public func trackData(trackId: String, range: Range<Int>? = nil) async throws -> (Data, HTTPURLResponse) {
@@ -137,12 +131,8 @@ public final class MediaClient: @unchecked Sendable {
             return completedFileURL
         }
 
-        let request = makeTrackRequest(trackId: trackId, range: nil)
-        let (temporaryURL, response) = try await session.download(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw KanadeError.httpError(statusCode: -1)
-        }
+        let path = mediaPath("tracks/\(trackId)")
+        let (temporaryURL, httpResponse) = try await performDownloadRequest(path: path)
 
         guard (200...299).contains(httpResponse.statusCode) else {
             throw KanadeError.httpError(statusCode: httpResponse.statusCode)
@@ -173,12 +163,8 @@ public final class MediaClient: @unchecked Sendable {
     }
 
     private func fetchTrackData(trackId: String, range: Range<Int64>?) async throws -> (Data, HTTPURLResponse) {
-        let request = makeTrackRequest(trackId: trackId, range: range)
-        let (data, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw KanadeError.httpError(statusCode: -1)
-        }
+        let path = mediaPath("tracks/\(trackId)")
+        let (data, httpResponse) = try await performDataRequest(path: path, range: range)
 
         guard (200...299).contains(httpResponse.statusCode) || httpResponse.statusCode == 206 else {
             throw KanadeError.httpError(statusCode: httpResponse.statusCode)
@@ -187,20 +173,89 @@ public final class MediaClient: @unchecked Sendable {
         return (data, httpResponse)
     }
 
-    private func makeTrackRequest(trackId: String, range: Range<Int64>?) -> URLRequest {
-        var request = URLRequest(url: trackURL(trackId: trackId))
-        applyMediaAuth(to: &request)
+    private func performDataRequest(path: String, range: Range<Int64>? = nil) async throws -> (Data, HTTPURLResponse) {
+        var didRefresh = false
+
+        while true {
+            let request = try await makeSignedRequest(path: path, range: range, refresh: didRefresh)
+            let (data, response) = try await session.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw KanadeError.httpError(statusCode: -1)
+            }
+
+            if httpResponse.statusCode == 403, !didRefresh {
+                didRefresh = true
+                continue
+            }
+
+            return (data, httpResponse)
+        }
+    }
+
+    private func performDownloadRequest(path: String) async throws -> (URL, HTTPURLResponse) {
+        var didRefresh = false
+
+        while true {
+            let request = try await makeSignedRequest(path: path, refresh: didRefresh)
+            let (temporaryURL, response) = try await session.download(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw KanadeError.httpError(statusCode: -1)
+            }
+
+            if httpResponse.statusCode == 403, !didRefresh {
+                didRefresh = true
+                continue
+            }
+
+            return (temporaryURL, httpResponse)
+        }
+    }
+
+    private func makeSignedRequest(path: String, range: Range<Int64>? = nil, refresh: Bool = false) async throws -> URLRequest {
+        let url = try await resolvedURL(path: path, refresh: refresh)
+        var request = URLRequest(url: url)
         if let range {
             request.setValue("bytes=\(range.lowerBound)-\(range.upperBound - 1)", forHTTPHeaderField: "Range")
         }
         return request
     }
 
-    private func applyMediaAuth(to request: inout URLRequest) {
+    private func resolvedURL(path: String, refresh: Bool) async throws -> URL {
+        let normalizedPath = normalizeMediaPath(path)
+
+        if let signer = mediaAuthSignerReference() {
+            if refresh {
+                await signer.invalidate(path: normalizedPath)
+            }
+            let signedURLString = try await signer.getSignedUrl(path: normalizedPath)
+            guard let signedURL = URL(string: signedURLString) else {
+                throw KanadeError.unknownResponse("signed_urls")
+            }
+            return signedURL
+        }
+
+        guard !refresh else {
+            throw KanadeError.notConnected
+        }
+
+        return baseURL.appending(path: normalizedPath)
+    }
+
+    private func mediaAuthSignerReference() -> MediaAuthSigner? {
         stateLock.lock()
-        let auth = mediaAuth
+        let signer = mediaAuthSigner
         stateLock.unlock()
-        auth?.apply(to: &request)
+        return signer
+    }
+
+    private func mediaPath(_ pathComponent: String) -> String {
+        "/media/\(pathComponent)"
+    }
+
+    private func normalizeMediaPath(_ path: String) -> String {
+        path.hasPrefix("/") ? path : "/\(path)"
     }
 
     private func makeFetchResult(from response: HTTPURLResponse, requestedRange: Range<Int64>, receivedByteCount: Int) throws -> TrackByteCacheFetchResult {

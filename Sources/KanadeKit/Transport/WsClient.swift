@@ -8,15 +8,12 @@ protocol WsClientDelegate: AnyObject, Sendable {
     func clientDidDisconnect(_ client: WsClient, error: (any Error)?)
     func client(_ client: WsClient, didUpdateState state: PlaybackState)
     func client(_ client: WsClient, didReceiveError error: any Error)
-    func client(_ client: WsClient, didReceiveMediaAuthKey key: String, keyId: String)
 }
 
 @Observable
 final class WsClient: @unchecked Sendable {
     private(set) var state: PlaybackState?
     private(set) var connected: Bool = false
-    private(set) var mediaAuthKey: String?
-    private(set) var mediaAuthKeyId: String?
 
     private struct PendingRequest: Sendable {
         let continuation: CheckedContinuation<WsResponse, any Error>
@@ -96,8 +93,6 @@ final class WsClient: @unchecked Sendable {
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.connected = false
-            self.mediaAuthKey = nil
-            self.mediaAuthKeyId = nil
             self.delegate?.clientDidDisconnect(self, error: nil)
         }
     }
@@ -136,6 +131,23 @@ final class WsClient: @unchecked Sendable {
             }
 
             _socket?.write(string: string)
+        }
+    }
+
+    func sendRequest(req: String, data: [String: Any] = [:]) async throws -> [String: Any] {
+        switch req {
+        case "sign_urls":
+            guard let paths = data["paths"] as? [String] else {
+                throw KanadeError.unknownRequest(req)
+            }
+
+            let response = try await request(.signURLs(paths: paths))
+            guard case .signedURLs(let signedURLs) = response else {
+                throw KanadeError.unknownResponse("signed_urls")
+            }
+            return ["signed_urls": signedURLs]
+        default:
+            throw KanadeError.unknownRequest(req)
         }
     }
 
@@ -207,8 +219,6 @@ final class WsClient: @unchecked Sendable {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.connected = false
-                self.mediaAuthKey = nil
-                self.mediaAuthKeyId = nil
                 self.delegate?.clientDidDisconnect(self, error: KanadeError.connectionLost)
             }
 
@@ -243,8 +253,6 @@ final class WsClient: @unchecked Sendable {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.connected = false
-                self.mediaAuthKey = nil
-                self.mediaAuthKeyId = nil
                 self.delegate?.clientDidDisconnect(self, error: KanadeError.connectionLost)
             }
 
@@ -276,13 +284,6 @@ final class WsClient: @unchecked Sendable {
                 }
                 removed?.timeoutTask?.cancel()
                 removed?.continuation.resume(returning: response)
-            case .mediaAuth(let key, let keyId):
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.mediaAuthKey = key
-                    self.mediaAuthKeyId = keyId
-                    self.delegate?.client(self, didReceiveMediaAuthKey: key, keyId: keyId)
-                }
             }
         } catch {
             let msg = String(decoding: data, as: UTF8.self)
@@ -291,26 +292,6 @@ final class WsClient: @unchecked Sendable {
                 guard let self else { return }
                 self.delegate?.client(self, didReceiveError: KanadeError.decodeFailed(underlying: error))
             }
-        }
-    }
-
-    @MainActor
-    private func handleServerMessage(_ message: ServerMessage) {
-        switch message {
-        case .state(let state):
-            self.state = state
-            self.connected = true
-            self.delegate?.client(self, didUpdateState: state)
-        case .response(let reqId, let response):
-            let removed = pendingRequestsLock.withLock { pending -> PendingRequest? in
-                pending.removeValue(forKey: reqId)
-            }
-            removed?.timeoutTask?.cancel()
-            removed?.continuation.resume(returning: response)
-        case .mediaAuth(let key, let keyId):
-            self.mediaAuthKey = key
-            self.mediaAuthKeyId = keyId
-            self.delegate?.client(self, didReceiveMediaAuthKey: key, keyId: keyId)
         }
     }
 
@@ -347,4 +328,11 @@ final class WsClient: @unchecked Sendable {
             item.continuation.resume(throwing: error)
         }
     }
+}
+
+extension WsClientDelegate {
+    func clientDidConnect(_ client: WsClient) {}
+    func clientDidDisconnect(_ client: WsClient, error: (any Error)?) {}
+    func client(_ client: WsClient, didUpdateState state: PlaybackState) {}
+    func client(_ client: WsClient, didReceiveError error: any Error) {}
 }
