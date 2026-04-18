@@ -6,6 +6,7 @@ public protocol KanadeClientDelegate: AnyObject, Sendable {
     func clientDidDisconnect(_ client: KanadeClient, error: (any Error)?)
     func client(_ client: KanadeClient, didUpdateState state: PlaybackState)
     func client(_ client: KanadeClient, didReceiveError error: any Error)
+    func client(_ client: KanadeClient, didReceiveMediaAuthKey key: String, keyId: String)
 }
 
 public extension KanadeClientDelegate {
@@ -13,12 +14,15 @@ public extension KanadeClientDelegate {
     func clientDidDisconnect(_ client: KanadeClient, error: (any Error)?) {}
     func client(_ client: KanadeClient, didUpdateState state: PlaybackState) {}
     func client(_ client: KanadeClient, didReceiveError error: any Error) {}
+    func client(_ client: KanadeClient, didReceiveMediaAuthKey key: String, keyId: String) {}
 }
 
 @Observable
 public final class KanadeClient: @unchecked Sendable {
     public private(set) var state: PlaybackState?
     public private(set) var connected: Bool = false
+    public private(set) var mediaAuthKey: String?
+    public private(set) var mediaAuthKeyId: String?
 
     public weak var delegate: (any KanadeClientDelegate)?
 
@@ -195,6 +199,8 @@ extension KanadeClient: WsClientDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.connected = false
+            self.mediaAuthKey = nil
+            self.mediaAuthKeyId = nil
             self.delegate?.clientDidDisconnect(self, error: error)
         }
     }
@@ -212,6 +218,15 @@ extension KanadeClient: WsClientDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.delegate?.client(self, didReceiveError: error)
+        }
+    }
+
+    nonisolated func client(_ client: WsClient, didReceiveMediaAuthKey key: String, keyId: String) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.mediaAuthKey = key
+            self.mediaAuthKeyId = keyId
+            self.delegate?.client(self, didReceiveMediaAuthKey: key, keyId: keyId)
         }
     }
 }

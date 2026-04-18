@@ -14,12 +14,15 @@ public struct TLSConfiguration: @unchecked Sendable {
         self.trustedCACertificates = trustedCACertificates
         self.allowSelfSignedServer = allowSelfSignedServer
     }
+
+    public var hasClientIdentity: Bool { clientIdentity != nil }
 }
 
 extension TLSConfiguration {
     public static func identityFromPKCS12(data: Data, password: String) throws -> SecIdentity {
+        let passphrase = password.isEmpty ? "" : password
         var items: CFArray?
-        let status = SecPKCS12Import(data as CFData, [kSecImportExportPassphrase as String: password] as CFDictionary, &items)
+        let status = SecPKCS12Import(data as CFData, [kSecImportExportPassphrase as String: passphrase] as CFDictionary, &items)
         guard status == errSecSuccess, let items = items as? [[String: Any]] else {
             throw KanadeError.tlsError("Failed to import PKCS12: status=\(status)")
         }
