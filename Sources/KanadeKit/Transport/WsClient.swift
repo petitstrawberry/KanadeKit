@@ -34,6 +34,7 @@ final class WsClient: @unchecked Sendable {
     @ObservationIgnored private let heartbeat: HeartbeatMonitor
     @ObservationIgnored private let encoder = JSONEncoder()
     @ObservationIgnored private let decoder = JSONDecoder()
+    @ObservationIgnored private let tlsConfiguration: TLSConfiguration?
 
     @ObservationIgnored weak var delegate: (any WsClientDelegate)?
 
@@ -45,12 +46,14 @@ final class WsClient: @unchecked Sendable {
         url: URL,
         reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
         heartbeatTimeout: TimeInterval = 45.0,
-        requestTimeout: TimeInterval = 10.0
+        requestTimeout: TimeInterval = 10.0,
+        tlsConfiguration: TLSConfiguration? = nil
     ) {
         self.url = url
         self.reconnectPolicy = reconnectPolicy
         self.requestTimeout = requestTimeout
         self.heartbeat = HeartbeatMonitor(timeout: heartbeatTimeout)
+        self.tlsConfiguration = tlsConfiguration
     }
 
     deinit {
@@ -141,7 +144,14 @@ final class WsClient: @unchecked Sendable {
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
 
-        let socket = WebSocket(request: request)
+        let socket: WebSocket
+        if let tlsConfig = tlsConfiguration {
+            let transport = MTLSTransport(configuration: tlsConfig)
+            let engine = WSEngine(transport: transport, certPinner: nil)
+            socket = WebSocket(request: request, engine: engine)
+        } else {
+            socket = WebSocket(request: request)
+        }
 
         socket.onEvent = { [weak self] event in
             self?.handleEvent(event)

@@ -10,4 +10,5 @@ public enum KanadeError: Error, Sendable {
     case unknownRequest(String)
     case unknownResponse(String)
     case unknownMessageType(String)
+    case tlsError(String)
 }

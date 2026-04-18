@@ -28,13 +28,15 @@ public final class KanadeClient: @unchecked Sendable {
         url: URL,
         reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
         heartbeatTimeout: TimeInterval = 45.0,
-        requestTimeout: TimeInterval = 10.0
+        requestTimeout: TimeInterval = 10.0,
+        tlsConfiguration: TLSConfiguration? = nil
     ) {
         self.wsClient = WsClient(
             url: url,
             reconnectPolicy: reconnectPolicy,
             heartbeatTimeout: heartbeatTimeout,
-            requestTimeout: requestTimeout
+            requestTimeout: requestTimeout,
+            tlsConfiguration: tlsConfiguration
         )
         self.state = wsClient.state
         self.connected = wsClient.connected
