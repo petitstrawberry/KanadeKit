@@ -9,9 +9,14 @@ public final class MediaClient: Sendable {
     private let session: URLSession
     
     public init(baseURL: URL, session: URLSession = .shared) {
-        // Ensure baseURL doesn't have trailing slash
         self.baseURL = baseURL.hasDirectoryPath ? baseURL : baseURL.deletingLastPathComponent()
         self.session = session
+    }
+
+    public convenience init(host: String, port: Int, useTLS: Bool = false, session: URLSession = .shared) {
+        let scheme = useTLS ? "https" : "http"
+        let url = URL(string: "\(scheme)://\(host):\(port)")!
+        self.init(baseURL: url, session: session)
     }
     
     // MARK: - Track URL

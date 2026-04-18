@@ -43,6 +43,26 @@ public final class KanadeClient: @unchecked Sendable {
         self.wsClient.delegate = self
     }
 
+    public convenience init(
+        host: String,
+        port: Int,
+        useTLS: Bool = false,
+        reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
+        heartbeatTimeout: TimeInterval = 45.0,
+        requestTimeout: TimeInterval = 10.0,
+        tlsConfiguration: TLSConfiguration? = nil
+    ) {
+        let scheme = useTLS ? "wss" : "ws"
+        let url = URL(string: "\(scheme)://\(host):\(port)/ws")!
+        self.init(
+            url: url,
+            reconnectPolicy: reconnectPolicy,
+            heartbeatTimeout: heartbeatTimeout,
+            requestTimeout: requestTimeout,
+            tlsConfiguration: tlsConfiguration
+        )
+    }
+
     deinit {
         wsClient.disconnect()
     }
