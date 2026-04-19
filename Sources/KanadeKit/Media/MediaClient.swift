@@ -65,6 +65,10 @@ public final class MediaClient: @unchecked Sendable {
         baseURL.appendingPathComponent("media/tracks/\(trackId)")
     }
 
+    public func signedTrackURL(trackId: String, refresh: Bool = false) async throws -> URL {
+        try await resolvedURL(path: mediaPath("tracks/\(trackId)"), refresh: refresh)
+    }
+
     public func artwork(albumId: String) async throws -> Data {
         let path = mediaPath("art/\(albumId)")
         let (data, response) = try await performDataRequest(path: path)
