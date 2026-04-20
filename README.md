@@ -63,6 +63,10 @@ let (queue, currentIndex) = try await client.getQueue()
 let media = MediaClient(baseURL: URL(string: "http://192.168.1.10:8081")!)
 let artworkData = try await media.artwork(albumId: "abc123")
 let trackUrl = media.trackURL(trackId: "def456") // feed to AVPlayer
+
+// HLS streaming URL (signed, for AVPlayer)
+let hlsUrl = try await media.signedHLSURL(trackId: "track-id") // AVPlayer-ready HLS manifest
+let hlsPath = media.hlsPath(trackId: "track-id", variant: "lossless") // raw path for signing
 ```
 
 ## API
@@ -168,6 +172,16 @@ let data = try await media.artwork(albumId: "album-id")
 // Raw range request
 let (audio, response) = try await media.trackData(trackId: "track-id", range: 0..<1024)
 ```
+
+**MediaClient Methods**
+
+| Method | Returns | Description |
+|---|---|---|
+| `trackURL(trackId:)` | `URL` | Signed track URL for AVPlayer (handles Range automatically) |
+| `artwork(albumId:)` | `async throws -> Data` | Album artwork image data |
+| `trackData(trackId:range:)` | `async throws -> (Data, URLResponse)` | Raw range request for audio data |
+| `signedHLSURL(trackId:variant:)` | `async throws -> URL` | Signed HLS manifest URL for AVPlayer streaming |
+| `hlsPath(trackId:variant:)` | `String` | Raw HLS path (for manual signing) |
 
 ### Models
 

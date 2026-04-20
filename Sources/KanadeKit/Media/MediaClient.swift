@@ -69,6 +69,16 @@ public final class MediaClient: @unchecked Sendable {
         try await resolvedURL(path: mediaPath("tracks/\(trackId)"), refresh: refresh)
     }
 
+    /// Returns the HLS path for a track (used with signer for signed URLs)
+    public func hlsPath(trackId: String, variant: String = "lossless") -> String {
+        return "/media/hls/\(trackId)/\(variant)/index.m3u8"
+    }
+
+    /// Returns a signed HLS manifest URL for streaming playback
+    public func signedHLSURL(trackId: String, variant: String = "lossless") async throws -> URL {
+        return try await resolvedURL(path: hlsPath(trackId: trackId, variant: variant))
+    }
+
     public func artwork(albumId: String) async throws -> Data {
         let path = mediaPath("art/\(albumId)")
         let (data, response) = try await performDataRequest(path: path)
@@ -224,6 +234,10 @@ public final class MediaClient: @unchecked Sendable {
             request.setValue("bytes=\(range.lowerBound)-\(range.upperBound - 1)", forHTTPHeaderField: "Range")
         }
         return request
+    }
+
+    private func resolvedURL(path: String) async throws -> URL {
+        try await resolvedURL(path: path, refresh: false)
     }
 
     private func resolvedURL(path: String, refresh: Bool) async throws -> URL {
