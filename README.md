@@ -1,6 +1,6 @@
 # KanadeKit
 
-Swift client for the [Kanade](https://github.com/petitstrawberry/kanade) music player protocol. Zero dependencies, pure Foundation.
+Swift client for the [Kanade](https://github.com/petitstrawberry/kanade) music player protocol. Pure Foundation for core logic, with Starscream for WebSocket transport and optional FLAC/ogg binary frameworks.
 
 ## Requirements
 
@@ -125,12 +125,17 @@ client.disconnect()
 | `getGenreTracks(genre:)` | `[Track]` |
 | `search(_ query:)` | `[Track]` |
 | `getQueue()` | `(tracks: [Track], currentIndex: Int?)` |
+| `sendRequest(req:data:)` | `[String: Any]` | Send a custom request (e.g. `sign_urls`) |
 
 **Node Selection**
 
 | Method | Description |
 |---|---|
 | `selectNode(_ String)` | Select output node by ID |
+| `localSessionStart(deviceName:deviceId:)` | Start a local playback session |
+| `localSessionStop()` | Stop the local playback session |
+| `localSessionUpdate(queue:currentIndex:positionSecs:status:volume:repeatMode:shuffle:)` | Update local session state |
+| `handoff(fromNodeId:toNodeId:)` | Hand off playback between nodes |
 
 **Observable State** (SwiftUI-ready)
 
@@ -142,6 +147,7 @@ client.state?.currentIndex   // Int?
 client.state?.shuffle        // Bool
 client.state?.repeatMode     // RepeatMode
 client.connected             // Bool
+client.reconnectExhausted    // Bool
 ```
 
 ### KanadeClientDelegate
@@ -177,11 +183,21 @@ let (audio, response) = try await media.trackData(trackId: "track-id", range: 0.
 
 | Method | Returns | Description |
 |---|---|---|
-| `trackURL(trackId:)` | `URL` | Signed track URL for AVPlayer (handles Range automatically) |
+| `trackURL(trackId:)` | `URL` | Unsigned track URL for AVPlayer |
+| `signedTrackURL(trackId:refresh:)` | `async throws -> URL` | Signed track URL (refreshes token if needed) |
 | `artwork(albumId:)` | `async throws -> Data` | Album artwork image data |
-| `trackData(trackId:range:)` | `async throws -> (Data, URLResponse)` | Raw range request for audio data |
+| `trackData(trackId:range:)` | `async throws -> (Data, URLResponse)` | Raw range request for audio data (`Range<Int>?`) |
 | `signedHLSURL(trackId:variant:)` | `async throws -> URL` | Signed HLS manifest URL for AVPlayer streaming |
 | `hlsPath(trackId:variant:)` | `String` | Raw HLS path (for manual signing) |
+| `downloadTrack(trackId:)` | `async throws -> URL` | Download full track to local cache |
+| `warmTrackInitialBytes(trackId:byteCount:)` | `async throws -> TrackByteCacheContentInfo` | Preload initial bytes into cache |
+| `ensureTrackBytesCached(trackId:range:)` | `async throws -> TrackByteCacheContentInfo` | Ensure a byte range is cached |
+| `readCachedTrackBytes(trackId:range:)` | `throws -> Data` | Read bytes from local cache |
+| `trackContentInfo(trackId:)` | `throws -> TrackByteCacheContentInfo` | Get cached track metadata |
+| `trackByteCacheSnapshot(trackId:)` | `throws -> TrackByteCacheSnapshot` | Get full cache snapshot |
+| `cleanupTrackCache()` | `throws` | Evict stale cached tracks |
+| `setMediaAuthSigner(_:)` | — | Set a `MediaAuthSigner` for signed URLs |
+| `clearMediaAuthSigner()` | — | Clear signer and revoke tokens |
 
 ### Models
 
@@ -189,13 +205,27 @@ let (audio, response) = try await media.trackData(trackId: "track-id", range: 0.
 |---|---|
 | `Track` | id, filePath, albumId, title, artist, albumArtist, albumTitle, composer, genre, trackNumber, discNumber, durationSecs, format, sampleRate |
 | `Album` | id, dirPath, title, artworkPath |
-| `Node` | id, name, connected, status, positionSecs, volume |
+| `Node` | id, name, connected, nodeType, queue, currentIndex, status, positionSecs, volume, repeatMode, shuffle, deviceId |
 | `PlaybackState` | nodes, selectedNodeId, queue, currentIndex, shuffle, repeatMode |
 | `PlaybackStatus` | stopped, playing, paused, loading |
 | `RepeatMode` | off, one, all |
 
 All models are `Codable`, `Sendable`, `Equatable`, `Hashable`.
 
+### MediaAuthSigner
+
+Used with `MediaClient` to sign track and artwork URLs. Typically provided by `KanadeClient` or a custom implementation.
+
+```swift
+public protocol MediaAuthSigner: Sendable {
+    func getSignedUrl(path: String) async throws -> String
+    func invalidate(path: String) async
+    func clear() async
+}
+```
+
+The `KanadeClient` exposes `sendRequest(req: "sign_urls", data: ["paths": [...]])` for URL signing.
+
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE) for details.
