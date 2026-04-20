@@ -3,12 +3,14 @@ import Foundation
 enum ServerMessage: Codable, Sendable, Equatable {
     case state(PlaybackState)
     case response(reqId: UInt64, response: WsResponse)
+    case mediaAuth(mediaAuthKeyId: String?)
 
     private enum CodingKeys: String, CodingKey {
         case type
         case state
         case reqId = "req_id"
         case data
+        case mediaAuthKeyId = "media_auth_key_id"
     }
 
     init(from decoder: Decoder) throws {
@@ -23,6 +25,9 @@ enum ServerMessage: Codable, Sendable, Equatable {
                 reqId: try container.decode(UInt64.self, forKey: .reqId),
                 response: try container.decode(WsResponse.self, forKey: .data)
             )
+        case "media_auth":
+            let keyId = try container.decodeIfPresent(String.self, forKey: .mediaAuthKeyId)
+            self = .mediaAuth(mediaAuthKeyId: keyId)
         default:
             throw KanadeError.unknownMessageType(type)
         }
@@ -39,6 +44,9 @@ enum ServerMessage: Codable, Sendable, Equatable {
             try container.encode("response", forKey: .type)
             try container.encode(reqId, forKey: .reqId)
             try container.encode(response, forKey: .data)
+        case .mediaAuth(let keyId):
+            try container.encode("media_auth", forKey: .type)
+            try container.encodeIfPresent(keyId, forKey: .mediaAuthKeyId)
         }
     }
 }

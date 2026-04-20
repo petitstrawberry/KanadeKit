@@ -284,6 +284,8 @@ final class WsClient: @unchecked Sendable {
                 }
                 removed?.timeoutTask?.cancel()
                 removed?.continuation.resume(returning: response)
+            case .mediaAuth:
+                break
             }
         } catch {
             let msg = String(decoding: data, as: UTF8.self)
