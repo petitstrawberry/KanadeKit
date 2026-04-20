@@ -22,6 +22,7 @@ final class WsClient: @unchecked Sendable {
 
     @ObservationIgnored private var _socket: WebSocket?
     @ObservationIgnored private var _reconnectTask: Task<Void, Never>?
+    private var _socketGeneration: UInt64 = 0
     private var _retryCount: Int = 0
     private let reqIdLock = OSAllocatedUnfairLock(initialState: UInt64(0))
     private var _active: Bool = false
@@ -57,6 +58,7 @@ final class WsClient: @unchecked Sendable {
     deinit {
         let socket = _socket
         _socket = nil
+        _socketGeneration &+= 1
         _active = false
         _reconnectTask?.cancel()
         _reconnectTask = nil
@@ -84,6 +86,7 @@ final class WsClient: @unchecked Sendable {
         _reconnectTask?.cancel()
         _reconnectTask = nil
         _socket = nil
+        _socketGeneration &+= 1
 
         socket?.disconnect()
         rejectAllPending(with: KanadeError.connectionLost)
@@ -155,6 +158,8 @@ final class WsClient: @unchecked Sendable {
         guard _active else { return }
 
         heartbeat.reset()
+        _socketGeneration &+= 1
+        let generation = _socketGeneration
 
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
@@ -169,7 +174,7 @@ final class WsClient: @unchecked Sendable {
         }
 
         socket.onEvent = { [weak self] event in
-            self?.handleEvent(event)
+            self?.handleEvent(event, generation: generation)
         }
 
         _socket?.disconnect()
@@ -178,7 +183,21 @@ final class WsClient: @unchecked Sendable {
         socket.connect()
     }
 
-    private func handleEvent(_ event: WebSocketEvent) {
+    private func handleEvent(_ event: WebSocketEvent, generation: UInt64) {
+        guard generation == _socketGeneration else {
+            switch event {
+            case .disconnected(let reason, let code):
+                print("[WsClient] ignoring stale .disconnected reason=\(String(describing: reason)) code=\(String(describing: code))")
+            case .peerClosed:
+                print("[WsClient] ignoring stale .peerClosed")
+            case .error(let error):
+                print("[WsClient] ignoring stale .error \(String(describing: error))")
+            default:
+                break
+            }
+            return
+        }
+
         switch event {
         case .text(let string):
             print("[WsClient] .text \(string.prefix(100))")
@@ -306,6 +325,7 @@ final class WsClient: @unchecked Sendable {
 
     private func scheduleReconnect() {
         guard _active else { return }
+        guard _reconnectTask == nil else { return }
 
         let delay = reconnectPolicy.nextDelay(retryCount: _retryCount)
         _retryCount += 1
