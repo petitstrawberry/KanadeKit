@@ -15,10 +15,11 @@ public extension KanadeClientDelegate {
     func client(_ client: KanadeClient, didReceiveError error: any Error) {}
 }
 
-@Observable
+    @Observable
 public final class KanadeClient: @unchecked Sendable {
     public private(set) var state: PlaybackState?
     public private(set) var connected: Bool = false
+    public private(set) var reconnectExhausted: Bool = false
 
     public weak var delegate: (any KanadeClientDelegate)?
 
@@ -27,7 +28,7 @@ public final class KanadeClient: @unchecked Sendable {
     public init(
         url: URL,
         reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
-        heartbeatTimeout: TimeInterval = 45.0,
+        heartbeatTimeout: TimeInterval = 20.0,
         requestTimeout: TimeInterval = 10.0,
         tlsConfiguration: TLSConfiguration? = nil
     ) {
@@ -48,7 +49,7 @@ public final class KanadeClient: @unchecked Sendable {
         port: Int,
         useTLS: Bool = false,
         reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
-        heartbeatTimeout: TimeInterval = 45.0,
+        heartbeatTimeout: TimeInterval = 20.0,
         requestTimeout: TimeInterval = 10.0,
         tlsConfiguration: TLSConfiguration? = nil
     ) {
@@ -191,6 +192,7 @@ extension KanadeClient: WsClientDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.connected = true
+            self.reconnectExhausted = false
             self.delegate?.clientDidConnect(self)
         }
     }
@@ -199,6 +201,7 @@ extension KanadeClient: WsClientDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.connected = false
+            self.reconnectExhausted = client.reconnectExhausted
             self.delegate?.clientDidDisconnect(self, error: error)
         }
     }

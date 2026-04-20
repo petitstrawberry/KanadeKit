@@ -10,10 +10,11 @@ protocol WsClientDelegate: AnyObject, Sendable {
     func client(_ client: WsClient, didReceiveError error: any Error)
 }
 
-@Observable
+    @Observable
 final class WsClient: @unchecked Sendable {
     private(set) var state: PlaybackState?
     private(set) var connected: Bool = false
+    private(set) var reconnectExhausted: Bool = false
 
     private struct PendingRequest: Sendable {
         let continuation: CheckedContinuation<WsResponse, any Error>
@@ -22,6 +23,7 @@ final class WsClient: @unchecked Sendable {
 
     @ObservationIgnored private var _socket: WebSocket?
     @ObservationIgnored private var _reconnectTask: Task<Void, Never>?
+    @ObservationIgnored private var _heartbeatTask: Task<Void, Never>?
     private var _socketGeneration: UInt64 = 0
     private var _retryCount: Int = 0
     private let reqIdLock = OSAllocatedUnfairLock(initialState: UInt64(0))
@@ -44,7 +46,7 @@ final class WsClient: @unchecked Sendable {
     init(
         url: URL,
         reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
-        heartbeatTimeout: TimeInterval = 45.0,
+        heartbeatTimeout: TimeInterval = 20.0,
         requestTimeout: TimeInterval = 10.0,
         tlsConfiguration: TLSConfiguration? = nil
     ) {
@@ -53,6 +55,7 @@ final class WsClient: @unchecked Sendable {
         self.requestTimeout = requestTimeout
         self.heartbeat = HeartbeatMonitor(timeout: heartbeatTimeout)
         self.tlsConfiguration = tlsConfiguration
+        self._heartbeatTask = startHeartbeatMonitor()
     }
 
     deinit {
@@ -62,6 +65,8 @@ final class WsClient: @unchecked Sendable {
         _active = false
         _reconnectTask?.cancel()
         _reconnectTask = nil
+        _heartbeatTask?.cancel()
+        _heartbeatTask = nil
         socket?.disconnect()
 
         let continuations = pendingRequestsLock.withLock { pending -> [CheckedContinuation<WsResponse, any Error>] in
@@ -75,6 +80,7 @@ final class WsClient: @unchecked Sendable {
     func connect() {
         guard !_active else { return }
         _active = true
+        reconnectExhausted = false
         startConnection()
     }
 
@@ -83,6 +89,7 @@ final class WsClient: @unchecked Sendable {
         let hadConnection = _socket != nil || _active
         _active = false
         _retryCount = 0
+        reconnectExhausted = false
         _reconnectTask?.cancel()
         _reconnectTask = nil
         _socket = nil
@@ -217,6 +224,7 @@ final class WsClient: @unchecked Sendable {
             heartbeat.reset()
             _retryCount = 0
             _reconnectTask = nil
+            reconnectExhausted = false
 
             let reqId = nextReqId()
 
@@ -281,7 +289,33 @@ final class WsClient: @unchecked Sendable {
                 scheduleReconnect()
             }
 
-        case .ping, .pong, .viabilityChanged, .reconnectSuggested, .cancelled:
+        case .viabilityChanged(let isViable):
+            if !isViable && _active {
+                print("[WsClient] network became non-viable, forcing disconnect")
+                let socket = _socket
+                _socket = nil
+                socket?.disconnect()
+
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.connected = false
+                    self.delegate?.clientDidDisconnect(self, error: KanadeError.connectionLost)
+                }
+
+                rejectAllPending(with: KanadeError.connectionLost)
+                scheduleReconnect()
+            }
+
+        case .pong:
+            heartbeat.reset()
+
+        case .ping:
+            break
+
+        case .reconnectSuggested:
+            break
+
+        case .cancelled:
             break
         }
     }
@@ -323,9 +357,40 @@ final class WsClient: @unchecked Sendable {
         }
     }
 
+    private func startHeartbeatMonitor() -> Task<Void, Never> {
+        Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                guard let self, self._active else { return }
+                guard self.connected else { continue }
+
+                if self.heartbeat.isTimedOut() {
+                    print("[WsClient] heartbeat timeout, forcing disconnect")
+                    let socket = self._socket
+                    self._socket = nil
+                    socket?.disconnect()
+
+                    await MainActor.run { [weak self] in
+                        guard let self else { return }
+                        self.connected = false
+                        self.delegate?.clientDidDisconnect(self, error: KanadeError.heartbeatTimeout)
+                    }
+
+                    self.rejectAllPending(with: KanadeError.heartbeatTimeout)
+                    self.scheduleReconnect()
+                }
+            }
+        }
+    }
+
     private func scheduleReconnect() {
         guard _active else { return }
         guard _reconnectTask == nil else { return }
+
+        if _retryCount >= reconnectPolicy.maxAttempts {
+            reconnectExhausted = true
+            return
+        }
 
         let delay = reconnectPolicy.nextDelay(retryCount: _retryCount)
         _retryCount += 1
