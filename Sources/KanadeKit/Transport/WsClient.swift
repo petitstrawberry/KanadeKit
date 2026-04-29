@@ -6,6 +6,7 @@ import os
 protocol WsClientDelegate: AnyObject, Sendable {
     func clientDidConnect(_ client: WsClient)
     func clientDidDisconnect(_ client: WsClient, error: (any Error)?)
+    func clientDidUpdateConnectionStatus(_ client: WsClient)
     func client(_ client: WsClient, didUpdateState state: PlaybackState)
     func client(_ client: WsClient, didReceiveError error: any Error)
     func client(_ client: WsClient, didReceiveMediaAuthKeyId keyId: String?)
@@ -14,6 +15,7 @@ protocol WsClientDelegate: AnyObject, Sendable {
 extension WsClientDelegate {
     func clientDidConnect(_ client: WsClient) {}
     func clientDidDisconnect(_ client: WsClient, error: (any Error)?) {}
+    func clientDidUpdateConnectionStatus(_ client: WsClient) {}
     func client(_ client: WsClient, didUpdateState state: PlaybackState) {}
     func client(_ client: WsClient, didReceiveError error: any Error) {}
     func client(_ client: WsClient, didReceiveMediaAuthKeyId keyId: String?) {}
@@ -400,6 +402,7 @@ final class WsClient: @unchecked Sendable {
 
         if _retryCount >= reconnectPolicy.maxAttempts {
             reconnectExhausted = true
+            notifyConnectionStatusChanged()
             return
         }
 
@@ -413,6 +416,13 @@ final class WsClient: @unchecked Sendable {
         }
 
         _reconnectTask = task
+    }
+
+    private func notifyConnectionStatusChanged() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.delegate?.clientDidUpdateConnectionStatus(self)
+        }
     }
 
     private func rejectAllPending(with error: any Error) {

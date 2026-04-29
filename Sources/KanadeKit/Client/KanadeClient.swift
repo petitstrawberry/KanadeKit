@@ -4,6 +4,7 @@ import Observation
 public protocol KanadeClientDelegate: AnyObject, Sendable {
     func clientDidConnect(_ client: KanadeClient)
     func clientDidDisconnect(_ client: KanadeClient, error: (any Error)?)
+    func clientDidUpdateConnectionStatus(_ client: KanadeClient)
     func client(_ client: KanadeClient, didUpdateState state: PlaybackState)
     func client(_ client: KanadeClient, didReceiveError error: any Error)
     func client(_ client: KanadeClient, didReceiveMediaAuthKeyId keyId: String?)
@@ -12,6 +13,7 @@ public protocol KanadeClientDelegate: AnyObject, Sendable {
 public extension KanadeClientDelegate {
     func clientDidConnect(_ client: KanadeClient) {}
     func clientDidDisconnect(_ client: KanadeClient, error: (any Error)?) {}
+    func clientDidUpdateConnectionStatus(_ client: KanadeClient) {}
     func client(_ client: KanadeClient, didUpdateState state: PlaybackState) {}
     func client(_ client: KanadeClient, didReceiveError error: any Error) {}
     func client(_ client: KanadeClient, didReceiveMediaAuthKeyId keyId: String?) {}
@@ -205,6 +207,15 @@ extension KanadeClient: WsClientDelegate {
             self.connected = false
             self.reconnectExhausted = client.reconnectExhausted
             self.delegate?.clientDidDisconnect(self, error: error)
+        }
+    }
+
+    nonisolated func clientDidUpdateConnectionStatus(_ client: WsClient) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.connected = client.connected
+            self.reconnectExhausted = client.reconnectExhausted
+            self.delegate?.clientDidUpdateConnectionStatus(self)
         }
     }
 
