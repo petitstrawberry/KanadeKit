@@ -6,8 +6,19 @@ import os
 protocol WsClientDelegate: AnyObject, Sendable {
     func clientDidConnect(_ client: WsClient)
     func clientDidDisconnect(_ client: WsClient, error: (any Error)?)
+    func clientDidUpdateConnectionStatus(_ client: WsClient)
     func client(_ client: WsClient, didUpdateState state: PlaybackState)
     func client(_ client: WsClient, didReceiveError error: any Error)
+    func client(_ client: WsClient, didReceiveMediaAuthKeyId keyId: String?)
+}
+
+extension WsClientDelegate {
+    func clientDidConnect(_ client: WsClient) {}
+    func clientDidDisconnect(_ client: WsClient, error: (any Error)?) {}
+    func clientDidUpdateConnectionStatus(_ client: WsClient) {}
+    func client(_ client: WsClient, didUpdateState state: PlaybackState) {}
+    func client(_ client: WsClient, didReceiveError error: any Error) {}
+    func client(_ client: WsClient, didReceiveMediaAuthKeyId keyId: String?) {}
 }
 
     @Observable
@@ -46,7 +57,7 @@ final class WsClient: @unchecked Sendable {
     init(
         url: URL,
         reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
-        heartbeatTimeout: TimeInterval = 20.0,
+        heartbeatTimeout: TimeInterval = 30.0,
         requestTimeout: TimeInterval = 10.0,
         tlsConfiguration: TLSConfiguration? = nil
     ) {
@@ -110,6 +121,7 @@ final class WsClient: @unchecked Sendable {
     func send(_ command: WsCommand) {
         guard let data = try? encoder.encode(ClientMessage.command(command)),
               let string = String(data: data, encoding: .utf8) else { return }
+        heartbeat.reset()
         _socket?.write(string: string)
     }
 
@@ -141,6 +153,7 @@ final class WsClient: @unchecked Sendable {
             }
 
             _socket?.write(string: string)
+            heartbeat.reset()
         }
     }
 
@@ -337,8 +350,8 @@ final class WsClient: @unchecked Sendable {
                 }
                 removed?.timeoutTask?.cancel()
                 removed?.continuation.resume(returning: response)
-            case .mediaAuth:
-                break
+            case .mediaAuth(let keyId):
+                delegate?.client(self, didReceiveMediaAuthKeyId: keyId)
             }
         } catch {
             let msg = String(decoding: data, as: UTF8.self)
@@ -389,6 +402,7 @@ final class WsClient: @unchecked Sendable {
 
         if _retryCount >= reconnectPolicy.maxAttempts {
             reconnectExhausted = true
+            notifyConnectionStatusChanged()
             return
         }
 
@@ -404,6 +418,13 @@ final class WsClient: @unchecked Sendable {
         _reconnectTask = task
     }
 
+    private func notifyConnectionStatusChanged() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.delegate?.clientDidUpdateConnectionStatus(self)
+        }
+    }
+
     private func rejectAllPending(with error: any Error) {
         let items = pendingRequestsLock.withLock { pending -> [PendingRequest] in
             let items = Array(pending.values)
@@ -415,11 +436,4 @@ final class WsClient: @unchecked Sendable {
             item.continuation.resume(throwing: error)
         }
     }
-}
-
-extension WsClientDelegate {
-    func clientDidConnect(_ client: WsClient) {}
-    func clientDidDisconnect(_ client: WsClient, error: (any Error)?) {}
-    func client(_ client: WsClient, didUpdateState state: PlaybackState) {}
-    func client(_ client: WsClient, didReceiveError error: any Error) {}
 }

@@ -4,15 +4,19 @@ import Observation
 public protocol KanadeClientDelegate: AnyObject, Sendable {
     func clientDidConnect(_ client: KanadeClient)
     func clientDidDisconnect(_ client: KanadeClient, error: (any Error)?)
+    func clientDidUpdateConnectionStatus(_ client: KanadeClient)
     func client(_ client: KanadeClient, didUpdateState state: PlaybackState)
     func client(_ client: KanadeClient, didReceiveError error: any Error)
+    func client(_ client: KanadeClient, didReceiveMediaAuthKeyId keyId: String?)
 }
 
 public extension KanadeClientDelegate {
     func clientDidConnect(_ client: KanadeClient) {}
     func clientDidDisconnect(_ client: KanadeClient, error: (any Error)?) {}
+    func clientDidUpdateConnectionStatus(_ client: KanadeClient) {}
     func client(_ client: KanadeClient, didUpdateState state: PlaybackState) {}
     func client(_ client: KanadeClient, didReceiveError error: any Error) {}
+    func client(_ client: KanadeClient, didReceiveMediaAuthKeyId keyId: String?) {}
 }
 
     @Observable
@@ -28,7 +32,7 @@ public final class KanadeClient: @unchecked Sendable {
     public init(
         url: URL,
         reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
-        heartbeatTimeout: TimeInterval = 20.0,
+        heartbeatTimeout: TimeInterval = 30.0,
         requestTimeout: TimeInterval = 10.0,
         tlsConfiguration: TLSConfiguration? = nil
     ) {
@@ -49,7 +53,7 @@ public final class KanadeClient: @unchecked Sendable {
         port: Int,
         useTLS: Bool = false,
         reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
-        heartbeatTimeout: TimeInterval = 20.0,
+        heartbeatTimeout: TimeInterval = 30.0,
         requestTimeout: TimeInterval = 10.0,
         tlsConfiguration: TLSConfiguration? = nil
     ) {
@@ -203,6 +207,22 @@ extension KanadeClient: WsClientDelegate {
             self.connected = false
             self.reconnectExhausted = client.reconnectExhausted
             self.delegate?.clientDidDisconnect(self, error: error)
+        }
+    }
+
+    nonisolated func clientDidUpdateConnectionStatus(_ client: WsClient) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.connected = client.connected
+            self.reconnectExhausted = client.reconnectExhausted
+            self.delegate?.clientDidUpdateConnectionStatus(self)
+        }
+    }
+
+    nonisolated func client(_ client: WsClient, didReceiveMediaAuthKeyId keyId: String?) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.delegate?.client(self, didReceiveMediaAuthKeyId: keyId)
         }
     }
 
