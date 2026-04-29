@@ -77,7 +77,7 @@ let hlsPath = media.hlsPath(trackId: "track-id", variant: "lossless") // raw pat
 let client = KanadeClient(
     url: URL(string: "ws://host:8080")!,
     reconnectPolicy: ReconnectPolicy(),      // 3s initial, 5s cap
-    heartbeatTimeout: 45.0,                   // receive timeout
+    heartbeatTimeout: 30.0,                   // receive timeout
     requestTimeout: 10.0                      // per-request timeout
 )
 
@@ -158,8 +158,10 @@ For non-SwiftUI consumers. All methods have empty default implementations.
 class MyDelegate: KanadeClientDelegate {
     func clientDidConnect(_ client: KanadeClient) { }
     func clientDidDisconnect(_ client: KanadeClient, error: Error?) { }
+    func clientDidUpdateConnectionStatus(_ client: KanadeClient) { }
     func client(_ client: KanadeClient, didUpdateState state: PlaybackState) { }
     func client(_ client: KanadeClient, didReceiveError error: Error) { }
+    func client(_ client: KanadeClient, didReceiveMediaAuthKeyId keyId: String?) { }
 }
 client.delegate = MyDelegate()
 ```
