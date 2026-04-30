@@ -1,5 +1,17 @@
 import Foundation
 
+/// Tri-state update for optional fields (e.g. `description` on `update_playlist`).
+///
+/// Maps to Rust's `Option<Option<T>>`:
+/// - `.unchanged`: field omitted from JSON (no change)
+/// - `.clear`: field encoded as `null` (clear the value)
+/// - `.set(value)`: field encoded with the value
+public enum DescriptionUpdate: Sendable, Equatable {
+    case unchanged
+    case clear
+    case set(String)
+}
+
 enum WsCommand: Codable, Sendable, Equatable {
     case play
     case pause
@@ -22,6 +34,13 @@ enum WsCommand: Codable, Sendable, Equatable {
     case localSessionStop
     case localSessionUpdate(queue: [Track], currentIndex: Int?, positionSecs: Double, status: PlaybackStatus, volume: Int, repeatMode: RepeatMode, shuffle: Bool)
     case handoff(fromNodeId: String, toNodeId: String)
+    case createPlaylist(name: String, description: String?, kind: PlaylistKind, filter: SmartFilter?, limit: Int?, sortBy: SmartSort?)
+    case updatePlaylist(playlistId: String, name: String?, description: DescriptionUpdate, kind: PlaylistKind?)
+    case deletePlaylist(playlistId: String)
+    case setPlaylistTracks(playlistId: String, trackIds: [String])
+    case appendPlaylistTracks(playlistId: String, trackIds: [String])
+    case removePlaylistTrack(playlistId: String, position: Int)
+    case movePlaylistTrack(playlistId: String, from: Int, to: Int)
 
     private enum CodingKeys: String, CodingKey {
         case cmd
@@ -40,6 +59,15 @@ enum WsCommand: Codable, Sendable, Equatable {
         case index
         case from
         case to
+        case name
+        case description
+        case kind
+        case filter
+        case limit
+        case sortBy = "sort_by"
+        case playlistId = "playlist_id"
+        case trackIds = "track_ids"
+        case position
     }
 
     init(from decoder: Decoder) throws {
@@ -114,6 +142,55 @@ enum WsCommand: Codable, Sendable, Equatable {
             self = .handoff(
                 fromNodeId: try container.decode(String.self, forKey: .fromNodeId),
                 toNodeId: try container.decode(String.self, forKey: .toNodeId)
+            )
+        case "create_playlist":
+            self = .createPlaylist(
+                name: try container.decode(String.self, forKey: .name),
+                description: try container.decodeIfPresent(String.self, forKey: .description),
+                kind: try container.decode(PlaylistKind.self, forKey: .kind),
+                filter: try container.decodeIfPresent(SmartFilter.self, forKey: .filter),
+                limit: try container.decodeIfPresent(Int.self, forKey: .limit),
+                sortBy: try container.decodeIfPresent(SmartSort.self, forKey: .sortBy)
+            )
+        case "update_playlist":
+            let descriptionUpdate: DescriptionUpdate
+            if container.contains(.description) {
+                if try container.decodeNil(forKey: .description) {
+                    descriptionUpdate = .clear
+                } else {
+                    descriptionUpdate = .set(try container.decode(String.self, forKey: .description))
+                }
+            } else {
+                descriptionUpdate = .unchanged
+            }
+            self = .updatePlaylist(
+                playlistId: try container.decode(String.self, forKey: .playlistId),
+                name: try container.decodeIfPresent(String.self, forKey: .name),
+                description: descriptionUpdate,
+                kind: try container.decodeIfPresent(PlaylistKind.self, forKey: .kind)
+            )
+        case "delete_playlist":
+            self = .deletePlaylist(playlistId: try container.decode(String.self, forKey: .playlistId))
+        case "set_playlist_tracks":
+            self = .setPlaylistTracks(
+                playlistId: try container.decode(String.self, forKey: .playlistId),
+                trackIds: try container.decode([String].self, forKey: .trackIds)
+            )
+        case "append_playlist_tracks":
+            self = .appendPlaylistTracks(
+                playlistId: try container.decode(String.self, forKey: .playlistId),
+                trackIds: try container.decode([String].self, forKey: .trackIds)
+            )
+        case "remove_playlist_track":
+            self = .removePlaylistTrack(
+                playlistId: try container.decode(String.self, forKey: .playlistId),
+                position: try container.decode(Int.self, forKey: .position)
+            )
+        case "move_playlist_track":
+            self = .movePlaylistTrack(
+                playlistId: try container.decode(String.self, forKey: .playlistId),
+                from: try container.decode(Int.self, forKey: .from),
+                to: try container.decode(Int.self, forKey: .to)
             )
         default:
             throw KanadeError.unknownCommand(cmd)
@@ -190,6 +267,47 @@ enum WsCommand: Codable, Sendable, Equatable {
             try container.encode("handoff", forKey: .cmd)
             try container.encode(fromNodeId, forKey: .fromNodeId)
             try container.encode(toNodeId, forKey: .toNodeId)
+        case .createPlaylist(let name, let description, let kind, let filter, let limit, let sortBy):
+            try container.encode("create_playlist", forKey: .cmd)
+            try container.encode(name, forKey: .name)
+            try container.encodeIfPresent(description, forKey: .description)
+            try container.encode(kind, forKey: .kind)
+            try container.encodeIfPresent(filter, forKey: .filter)
+            try container.encodeIfPresent(limit, forKey: .limit)
+            try container.encodeIfPresent(sortBy, forKey: .sortBy)
+        case .updatePlaylist(let playlistId, let name, let description, let kind):
+            try container.encode("update_playlist", forKey: .cmd)
+            try container.encode(playlistId, forKey: .playlistId)
+            try container.encodeIfPresent(name, forKey: .name)
+            switch description {
+            case .unchanged:
+                break
+            case .clear:
+                try container.encodeNil(forKey: .description)
+            case .set(let value):
+                try container.encode(value, forKey: .description)
+            }
+            try container.encodeIfPresent(kind, forKey: .kind)
+        case .deletePlaylist(let playlistId):
+            try container.encode("delete_playlist", forKey: .cmd)
+            try container.encode(playlistId, forKey: .playlistId)
+        case .setPlaylistTracks(let playlistId, let trackIds):
+            try container.encode("set_playlist_tracks", forKey: .cmd)
+            try container.encode(playlistId, forKey: .playlistId)
+            try container.encode(trackIds, forKey: .trackIds)
+        case .appendPlaylistTracks(let playlistId, let trackIds):
+            try container.encode("append_playlist_tracks", forKey: .cmd)
+            try container.encode(playlistId, forKey: .playlistId)
+            try container.encode(trackIds, forKey: .trackIds)
+        case .removePlaylistTrack(let playlistId, let position):
+            try container.encode("remove_playlist_track", forKey: .cmd)
+            try container.encode(playlistId, forKey: .playlistId)
+            try container.encode(position, forKey: .position)
+        case .movePlaylistTrack(let playlistId, let from, let to):
+            try container.encode("move_playlist_track", forKey: .cmd)
+            try container.encode(playlistId, forKey: .playlistId)
+            try container.encode(from, forKey: .from)
+            try container.encode(to, forKey: .to)
         }
     }
 }

@@ -59,6 +59,18 @@ let artists = try await client.getArtists()
 let results = try await client.search("Neru")
 let (queue, currentIndex) = try await client.getQueue()
 
+// Playlists
+let playlists = try await client.getPlaylists()
+let playlist = try await client.getPlaylist(playlistId: "pl-1")
+let playlistTracks = try await client.getPlaylistTracks(playlistId: "pl-1")
+
+client.createPlaylist(name: "Favorites", description: "Best of", kind: .normal)
+client.updatePlaylist(playlistId: "pl-1", name: "Renamed", description: .clear)
+client.appendPlaylistTracks(playlistId: "pl-1", trackIds: ["t1", "t2"])
+client.movePlaylistTrack(playlistId: "pl-1", from: 0, to: 3)
+client.removePlaylistTrack(playlistId: "pl-1", position: 2)
+client.deletePlaylist("pl-1")
+
 // Media
 let media = MediaClient(baseURL: URL(string: "http://192.168.1.10:8081")!)
 let artworkData = try await media.artwork(albumId: "abc123")
@@ -125,7 +137,24 @@ client.disconnect()
 | `getGenreTracks(genre:)` | `[Track]` |
 | `search(_ query:)` | `[Track]` |
 | `getQueue()` | `(tracks: [Track], currentIndex: Int?)` |
+| `getPlaylists()` | `[Playlist]` |
+| `getPlaylist(playlistId:)` | `Playlist?` |
+| `getPlaylistTracks(playlistId:)` | `[Track]` |
 | `sendRequest(req:data:)` | `[String: Any]` | Send a custom request (e.g. `sign_urls`) |
+
+**Playlist Mutations** — fire-and-forget. Track mutations apply to `kind: .normal` only.
+
+| Method | Description |
+|---|---|
+| `createPlaylist(name:description:kind:filter:limit:sortBy:)` | Create a normal or smart playlist |
+| `updatePlaylist(playlistId:name:description:kind:)` | Update metadata; `description` uses `DescriptionUpdate` |
+| `deletePlaylist(_ String)` | Delete a playlist |
+| `setPlaylistTracks(playlistId:trackIds:)` | Replace tracks in a normal playlist |
+| `appendPlaylistTracks(playlistId:trackIds:)` | Append tracks |
+| `removePlaylistTrack(playlistId:position:)` | Remove track at position |
+| `movePlaylistTrack(playlistId:from:to:)` | Reorder track |
+
+`DescriptionUpdate` models the protocol's `Option<Option<String>>` semantics: `.unchanged` omits the field, `.clear` sends `null`, `.set(String)` sends the value.
 
 **Node Selection**
 
@@ -211,6 +240,15 @@ let (audio, response) = try await media.trackData(trackId: "track-id", range: 0.
 | `PlaybackState` | nodes, selectedNodeId, queue, currentIndex, shuffle, repeatMode |
 | `PlaybackStatus` | stopped, playing, paused, loading |
 | `RepeatMode` | off, one, all |
+| `Playlist` | id, name, description, kind, createdAt, updatedAt, filter, limit, sortBy |
+| `PlaylistKind` | normal, smart |
+| `SmartFilter` | matchMode, conditions |
+| `SmartCondition` | field, op, value |
+| `SmartField` | title, artist, albumArtist, album, composer, genre |
+| `SmartOperator` | equals, notEquals, contains, notContains, startsWith, endsWith |
+| `MatchMode` | all, any |
+| `SmartSort` | title, artist, album, genre |
+| `DescriptionUpdate` | unchanged, clear, set(String) |
 
 All models are `Codable`, `Sendable`, `Equatable`, `Hashable`.
 
