@@ -12,6 +12,9 @@ enum WsResponse: Codable, Sendable, Equatable {
     case searchResults([Track])
     case queue(tracks: [Track], currentIndex: Int?)
     case signedURLs([String: String])
+    case playlists([Playlist])
+    case playlistDetails(Playlist?)
+    case playlistTracks(playlistId: String, tracks: [Track])
 
     private struct DynamicCodingKeys: CodingKey {
         var stringValue: String
@@ -46,6 +49,18 @@ enum WsResponse: Codable, Sendable, Equatable {
 
         private enum CodingKeys: String, CodingKey {
             case urls
+        }
+    }
+
+    private struct NestedPlaylists: Codable, Sendable, Equatable { let playlists: [Playlist] }
+    private struct PlaylistDetailsData: Codable, Sendable, Equatable { let playlist: Playlist? }
+    private struct PlaylistTracksData: Codable, Sendable, Equatable {
+        let playlistId: String
+        let tracks: [Track]
+
+        private enum CodingKeys: String, CodingKey {
+            case playlistId = "playlist_id"
+            case tracks
         }
     }
 
@@ -90,6 +105,15 @@ enum WsResponse: Codable, Sendable, Equatable {
         case "signed_urls":
             let nested = try container.decode(SignedURLsData.self, forKey: key)
             self = .signedURLs(nested.urls)
+        case "playlists":
+            let nested = try container.decode(NestedPlaylists.self, forKey: key)
+            self = .playlists(nested.playlists)
+        case "playlist_details":
+            let nested = try container.decode(PlaylistDetailsData.self, forKey: key)
+            self = .playlistDetails(nested.playlist)
+        case "playlist_tracks":
+            let nested = try container.decode(PlaylistTracksData.self, forKey: key)
+            self = .playlistTracks(playlistId: nested.playlistId, tracks: nested.tracks)
         default:
             throw KanadeError.unknownResponse(key.stringValue)
         }
@@ -126,6 +150,21 @@ enum WsResponse: Codable, Sendable, Equatable {
             try container.encode(
                 SignedURLsData(urls: signedURLs),
                 forKey: DynamicCodingKeys(stringValue: "signed_urls")!
+            )
+        case .playlists(let playlists):
+            try container.encode(
+                NestedPlaylists(playlists: playlists),
+                forKey: DynamicCodingKeys(stringValue: "playlists")!
+            )
+        case .playlistDetails(let playlist):
+            try container.encode(
+                PlaylistDetailsData(playlist: playlist),
+                forKey: DynamicCodingKeys(stringValue: "playlist_details")!
+            )
+        case .playlistTracks(let playlistId, let tracks):
+            try container.encode(
+                PlaylistTracksData(playlistId: playlistId, tracks: tracks),
+                forKey: DynamicCodingKeys(stringValue: "playlist_tracks")!
             )
         }
     }

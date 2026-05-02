@@ -23,6 +23,7 @@ enum ClientMessage: Codable, Sendable, Equatable {
         case genre
         case query
         case paths
+        case playlistId = "playlist_id"
     }
 
     init(from decoder: Decoder) throws {
@@ -131,6 +132,18 @@ enum ClientMessage: Codable, Sendable, Equatable {
                     reqId: reqId,
                     request: .signURLs(paths: try container.decode([String].self, forKey: .paths))
                 )
+            case "get_playlists":
+                self = .request(reqId: reqId, request: .getPlaylists)
+            case "get_playlist":
+                self = .request(
+                    reqId: reqId,
+                    request: .getPlaylist(playlistId: try container.decode(String.self, forKey: .playlistId))
+                )
+            case "get_playlist_tracks":
+                self = .request(
+                    reqId: reqId,
+                    request: .getPlaylistTracks(playlistId: try container.decode(String.self, forKey: .playlistId))
+                )
             default:
                 throw KanadeError.unknownRequest(req)
             }
@@ -180,6 +193,14 @@ enum ClientMessage: Codable, Sendable, Equatable {
             case .signURLs(let paths):
                 try container.encode("sign_urls", forKey: .req)
                 try container.encode(paths, forKey: .paths)
+            case .getPlaylists:
+                try container.encode("get_playlists", forKey: .req)
+            case .getPlaylist(let playlistId):
+                try container.encode("get_playlist", forKey: .req)
+                try container.encode(playlistId, forKey: .playlistId)
+            case .getPlaylistTracks(let playlistId):
+                try container.encode("get_playlist_tracks", forKey: .req)
+                try container.encode(playlistId, forKey: .playlistId)
             }
         }
     }

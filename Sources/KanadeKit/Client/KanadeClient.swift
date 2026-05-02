@@ -186,6 +186,70 @@ public final class KanadeClient: @unchecked Sendable {
         return (tracks, currentIndex)
     }
 
+    public func getPlaylists() async throws -> [Playlist] {
+        let response = try await wsClient.request(.getPlaylists)
+        guard case .playlists(let playlists) = response else {
+            throw KanadeError.unknownResponse("playlists")
+        }
+        return playlists
+    }
+
+    public func getPlaylist(playlistId: String) async throws -> Playlist? {
+        let response = try await wsClient.request(.getPlaylist(playlistId: playlistId))
+        guard case .playlistDetails(let playlist) = response else {
+            throw KanadeError.unknownResponse("playlist_details")
+        }
+        return playlist
+    }
+
+    public func getPlaylistTracks(playlistId: String) async throws -> [Track] {
+        let response = try await wsClient.request(.getPlaylistTracks(playlistId: playlistId))
+        guard case .playlistTracks(_, let tracks) = response else {
+            throw KanadeError.unknownResponse("playlist_tracks")
+        }
+        return tracks
+    }
+
+    public func createPlaylist(
+        name: String,
+        description: String? = nil,
+        kind: PlaylistKind = .normal,
+        filter: SmartFilter? = nil,
+        limit: Int? = nil,
+        sortBy: SmartSort? = nil
+    ) {
+        wsClient.send(.createPlaylist(name: name, description: description, kind: kind, filter: filter, limit: limit, sortBy: sortBy))
+    }
+
+    public func updatePlaylist(
+        playlistId: String,
+        name: String? = nil,
+        description: DescriptionUpdate = .unchanged,
+        kind: PlaylistKind? = nil
+    ) {
+        wsClient.send(.updatePlaylist(playlistId: playlistId, name: name, description: description, kind: kind))
+    }
+
+    public func deletePlaylist(_ playlistId: String) {
+        wsClient.send(.deletePlaylist(playlistId: playlistId))
+    }
+
+    public func setPlaylistTracks(playlistId: String, trackIds: [String]) {
+        wsClient.send(.setPlaylistTracks(playlistId: playlistId, trackIds: trackIds))
+    }
+
+    public func appendPlaylistTracks(playlistId: String, trackIds: [String]) {
+        wsClient.send(.appendPlaylistTracks(playlistId: playlistId, trackIds: trackIds))
+    }
+
+    public func removePlaylistTrack(playlistId: String, position: Int) {
+        wsClient.send(.removePlaylistTrack(playlistId: playlistId, position: position))
+    }
+
+    public func movePlaylistTrack(playlistId: String, from: Int, to: Int) {
+        wsClient.send(.movePlaylistTrack(playlistId: playlistId, from: from, to: to))
+    }
+
     public func sendRequest(req: String, data: [String: Any] = [:]) async throws -> [String: Any] {
         try await wsClient.sendRequest(req: req, data: data)
     }
