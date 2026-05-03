@@ -84,14 +84,12 @@ final class MTLSTransport: Transport, @unchecked Sendable {
             { _, sec_trust, verify_complete in
                 let trust = sec_trust_copy_ref(sec_trust).takeRetainedValue()
 
-                if allowSelfSigned {
-                    verify_complete(true)
-                    return
-                }
-
                 if let trustedCerts, !trustedCerts.isEmpty {
                     SecTrustSetAnchorCertificates(trust, trustedCerts as CFArray)
                     SecTrustSetAnchorCertificatesOnly(trust, true)
+                } else if allowSelfSigned {
+                    verify_complete(false)
+                    return
                 }
 
                 if let pinner = certificatePinning {

@@ -65,6 +65,64 @@ enum WsResponse: Codable, Sendable, Equatable {
         }
     }
 
+    private static func decodeAlbums(
+        from container: KeyedDecodingContainer<DynamicCodingKeys>,
+        forKey key: DynamicCodingKeys
+    ) throws -> [Album] {
+        if let direct = try? container.decode([Album].self, forKey: key) {
+            return direct
+        }
+        return try container.decode(NestedAlbums.self, forKey: key).albums
+    }
+
+    private static func decodeTracks(
+        from container: KeyedDecodingContainer<DynamicCodingKeys>,
+        forKey key: DynamicCodingKeys
+    ) throws -> [Track] {
+        if let direct = try? container.decode([Track].self, forKey: key) {
+            return direct
+        }
+        return try container.decode(NestedTracks.self, forKey: key).tracks
+    }
+
+    private static func decodeStrings(
+        nestedKey: String,
+        from container: KeyedDecodingContainer<DynamicCodingKeys>,
+        forKey key: DynamicCodingKeys
+    ) throws -> [String] {
+        if let direct = try? container.decode([String].self, forKey: key) {
+            return direct
+        }
+        switch nestedKey {
+        case "artists":
+            return try container.decode(NestedArtists.self, forKey: key).artists
+        case "genres":
+            return try container.decode(NestedGenres.self, forKey: key).genres
+        default:
+            throw KanadeError.unknownResponse(nestedKey)
+        }
+    }
+
+    private static func decodePlaylists(
+        from container: KeyedDecodingContainer<DynamicCodingKeys>,
+        forKey key: DynamicCodingKeys
+    ) throws -> [Playlist] {
+        if let direct = try? container.decode([Playlist].self, forKey: key) {
+            return direct
+        }
+        return try container.decode(NestedPlaylists.self, forKey: key).playlists
+    }
+
+    private static func decodeSignedURLs(
+        from container: KeyedDecodingContainer<DynamicCodingKeys>,
+        forKey key: DynamicCodingKeys
+    ) throws -> [String: String] {
+        if let direct = try? container.decode([String: String].self, forKey: key) {
+            return direct
+        }
+        return try container.decode(SignedURLsData.self, forKey: key).urls
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKeys.self)
 
@@ -74,44 +132,32 @@ enum WsResponse: Codable, Sendable, Equatable {
 
         switch key.stringValue {
         case "albums":
-            let nested = try container.decode(NestedAlbums.self, forKey: key)
-            self = .albums(nested.albums)
+            self = .albums(try Self.decodeAlbums(from: container, forKey: key))
         case "album_tracks":
-            let nested = try container.decode(NestedTracks.self, forKey: key)
-            self = .albumTracks(nested.tracks)
+            self = .albumTracks(try Self.decodeTracks(from: container, forKey: key))
         case "tracks":
-            let nested = try container.decode(NestedTracks.self, forKey: key)
-            self = .tracks(nested.tracks)
+            self = .tracks(try Self.decodeTracks(from: container, forKey: key))
         case "artists":
-            let nested = try container.decode(NestedArtists.self, forKey: key)
-            self = .artists(nested.artists)
+            self = .artists(try Self.decodeStrings(nestedKey: "artists", from: container, forKey: key))
         case "artist_albums":
-            let nested = try container.decode(NestedAlbums.self, forKey: key)
-            self = .artistAlbums(nested.albums)
+            self = .artistAlbums(try Self.decodeAlbums(from: container, forKey: key))
         case "artist_tracks":
-            let nested = try container.decode(NestedTracks.self, forKey: key)
-            self = .artistTracks(nested.tracks)
+            self = .artistTracks(try Self.decodeTracks(from: container, forKey: key))
         case "genres":
-            let nested = try container.decode(NestedGenres.self, forKey: key)
-            self = .genres(nested.genres)
+            self = .genres(try Self.decodeStrings(nestedKey: "genres", from: container, forKey: key))
         case "genre_albums":
-            let nested = try container.decode(NestedAlbums.self, forKey: key)
-            self = .genreAlbums(nested.albums)
+            self = .genreAlbums(try Self.decodeAlbums(from: container, forKey: key))
         case "genre_tracks":
-            let nested = try container.decode(NestedTracks.self, forKey: key)
-            self = .genreTracks(nested.tracks)
+            self = .genreTracks(try Self.decodeTracks(from: container, forKey: key))
         case "search_results":
-            let nested = try container.decode(NestedTracks.self, forKey: key)
-            self = .searchResults(nested.tracks)
+            self = .searchResults(try Self.decodeTracks(from: container, forKey: key))
         case "queue":
             let queueData = try container.decode(QueueData.self, forKey: key)
             self = .queue(tracks: queueData.tracks, currentIndex: queueData.currentIndex)
         case "signed_urls":
-            let nested = try container.decode(SignedURLsData.self, forKey: key)
-            self = .signedURLs(nested.urls)
+            self = .signedURLs(try Self.decodeSignedURLs(from: container, forKey: key))
         case "playlists":
-            let nested = try container.decode(NestedPlaylists.self, forKey: key)
-            self = .playlists(nested.playlists)
+            self = .playlists(try Self.decodePlaylists(from: container, forKey: key))
         case "playlist_details":
             let nested = try container.decode(PlaylistDetailsData.self, forKey: key)
             self = .playlistDetails(nested.playlist)
