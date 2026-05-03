@@ -3,6 +3,7 @@ import Foundation
 enum WsResponse: Codable, Sendable, Equatable {
     case albums([Album])
     case albumTracks([Track])
+    case tracks([Track])
     case artists([String])
     case artistAlbums([Album])
     case artistTracks([Track])
@@ -78,6 +79,9 @@ enum WsResponse: Codable, Sendable, Equatable {
         case "album_tracks":
             let nested = try container.decode(NestedTracks.self, forKey: key)
             self = .albumTracks(nested.tracks)
+        case "tracks":
+            let nested = try container.decode(NestedTracks.self, forKey: key)
+            self = .tracks(nested.tracks)
         case "artists":
             let nested = try container.decode(NestedArtists.self, forKey: key)
             self = .artists(nested.artists)
@@ -127,6 +131,8 @@ enum WsResponse: Codable, Sendable, Equatable {
             try container.encode(NestedAlbums(albums: albums), forKey: DynamicCodingKeys(stringValue: "albums")!)
         case .albumTracks(let tracks):
             try container.encode(NestedTracks(tracks: tracks), forKey: DynamicCodingKeys(stringValue: "album_tracks")!)
+        case .tracks(let tracks):
+            try container.encode(NestedTracks(tracks: tracks), forKey: DynamicCodingKeys(stringValue: "tracks")!)
         case .artists(let artists):
             try container.encode(NestedArtists(artists: artists), forKey: DynamicCodingKeys(stringValue: "artists")!)
         case .artistAlbums(let albums):

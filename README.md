@@ -55,6 +55,8 @@ client.replaceAndPlay(tracks: playlist, index: 0)
 // Library queries — return concrete types
 let albums = try await client.getAlbums()
 let tracks = try await client.getAlbumTracks(albumId: "abc")
+let allTracks = try await client.getTracks()                    // paginated
+let page = try await client.getTracks(offset: 100, limit: 50)  // with pagination
 let artists = try await client.getArtists()
 let results = try await client.search("Neru")
 let (queue, currentIndex) = try await client.getQueue()
@@ -129,6 +131,7 @@ client.disconnect()
 |---|---|
 | `getAlbums()` | `[Album]` |
 | `getAlbumTracks(albumId:)` | `[Track]` |
+| `getTracks(offset: Int?, limit: Int?)` | `[Track]` |
 | `getArtists()` | `[String]` |
 | `getArtistAlbums(artist:)` | `[Album]` |
 | `getArtistTracks(artist:)` | `[Track]` |

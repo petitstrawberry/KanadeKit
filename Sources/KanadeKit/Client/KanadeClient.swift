@@ -122,6 +122,14 @@ public final class KanadeClient: @unchecked Sendable {
         return tracks
     }
 
+    public func getTracks(offset: Int? = nil, limit: Int? = nil) async throws -> [Track] {
+        let response = try await wsClient.request(.getTracks(offset: offset, limit: limit))
+        guard case .tracks(let tracks) = response else {
+            throw KanadeError.unknownResponse("tracks")
+        }
+        return tracks
+    }
+
     public func getArtists() async throws -> [String] {
         let response = try await wsClient.request(.getArtists)
         guard case .artists(let artists) = response else {
