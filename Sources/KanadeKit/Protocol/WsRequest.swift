@@ -3,6 +3,7 @@ import Foundation
 enum WsRequest: Codable, Sendable, Equatable {
     case getAlbums
     case getAlbumTracks(albumId: String)
+    case getTracks(offset: Int?, limit: Int?)
     case getArtists
     case getArtistAlbums(artist: String)
     case getArtistTracks(artist: String)
@@ -24,6 +25,8 @@ enum WsRequest: Codable, Sendable, Equatable {
         case query
         case paths
         case playlistId = "playlist_id"
+        case offset
+        case limit
     }
 
     init(from decoder: Decoder) throws {
@@ -35,6 +38,11 @@ enum WsRequest: Codable, Sendable, Equatable {
             self = .getAlbums
         case "get_album_tracks":
             self = .getAlbumTracks(albumId: try container.decode(String.self, forKey: .albumId))
+        case "get_tracks":
+            self = .getTracks(
+                offset: try container.decodeIfPresent(Int.self, forKey: .offset),
+                limit: try container.decodeIfPresent(Int.self, forKey: .limit)
+            )
         case "get_artists":
             self = .getArtists
         case "get_artist_albums":
@@ -73,6 +81,10 @@ enum WsRequest: Codable, Sendable, Equatable {
         case .getAlbumTracks(let albumId):
             try container.encode("get_album_tracks", forKey: .req)
             try container.encode(albumId, forKey: .albumId)
+        case .getTracks(let offset, let limit):
+            try container.encode("get_tracks", forKey: .req)
+            try container.encodeIfPresent(offset, forKey: .offset)
+            try container.encodeIfPresent(limit, forKey: .limit)
         case .getArtists:
             try container.encode("get_artists", forKey: .req)
         case .getArtistAlbums(let artist):
