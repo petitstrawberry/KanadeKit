@@ -32,7 +32,7 @@ enum WsCommand: Codable, Sendable, Equatable {
     case replaceAndPlay(tracks: [Track], index: Int)
     case localSessionStart(deviceName: String, deviceId: String?)
     case localSessionStop
-    case localSessionUpdate(queue: [Track], currentIndex: Int?, positionSecs: Double, status: PlaybackStatus, volume: Int, repeatMode: RepeatMode, shuffle: Bool)
+    case localSessionUpdate(queue: [Track]?, currentIndex: Int?, positionSecs: Double, status: PlaybackStatus, volume: Int, repeatMode: RepeatMode, shuffle: Bool)
     case handoff(fromNodeId: String, toNodeId: String)
     case createPlaylist(name: String, description: String?, kind: PlaylistKind, filter: SmartFilter?, limit: Int?, sortBy: SmartSort?)
     case updatePlaylist(playlistId: String, name: String?, description: DescriptionUpdate, kind: PlaylistKind?)
@@ -122,7 +122,7 @@ enum WsCommand: Codable, Sendable, Equatable {
         case "local_session_stop":
             self = .localSessionStop
         case "local_session_update":
-            let queue = try container.decode([Track].self, forKey: .tracks)
+            let queue = try container.decodeIfPresent([Track].self, forKey: .tracks)
             let currentIndex = try container.decodeIfPresent(Int.self, forKey: .index)
             let positionSecs = try container.decode(Double.self, forKey: .positionSecs)
             let status = try container.decode(PlaybackStatus.self, forKey: .status)
@@ -256,7 +256,7 @@ enum WsCommand: Codable, Sendable, Equatable {
             try container.encode("local_session_stop", forKey: .cmd)
         case .localSessionUpdate(let queue, let currentIndex, let positionSecs, let status, let volume, let repeatMode, let shuffle):
             try container.encode("local_session_update", forKey: .cmd)
-            try container.encode(queue, forKey: .tracks)
+            try container.encodeIfPresent(queue, forKey: .tracks)
             try container.encodeIfPresent(currentIndex, forKey: .index)
             try container.encode(positionSecs, forKey: .positionSecs)
             try container.encode(status, forKey: .status)
