@@ -403,7 +403,7 @@ private final class TLSURLSessionDelegate: NSObject, URLSessionDelegate, @unchec
                 SecTrustSetAnchorCertificates(trust, trustedCertificates as CFArray)
                 SecTrustSetAnchorCertificatesOnly(trust, true)
             } else if allowSelfSignedServer {
-                completionHandler(.cancelAuthenticationChallenge, nil)
+                completionHandler(.useCredential, URLCredential(trust: trust))
                 return
             }
 
