@@ -101,7 +101,7 @@ public final class KanadeClient: @unchecked Sendable {
     public func replaceAndPlay(tracks: [Track], index: Int) { wsClient.send(.replaceAndPlay(tracks: tracks, index: index)) }
      public func localSessionStart(deviceName: String, deviceId: String?) { wsClient.send(.localSessionStart(deviceName: deviceName, deviceId: deviceId)) }
     public func localSessionStop() { wsClient.send(.localSessionStop) }
-    public func localSessionUpdate(queue: [Track], currentIndex: Int?, positionSecs: Double, status: PlaybackStatus, volume: Int, repeatMode: RepeatMode, shuffle: Bool) {
+    public func localSessionUpdate(queue: [Track]?, currentIndex: Int?, positionSecs: Double, status: PlaybackStatus, volume: Int, repeatMode: RepeatMode, shuffle: Bool) {
         wsClient.send(.localSessionUpdate(queue: queue, currentIndex: currentIndex, positionSecs: positionSecs, status: status, volume: volume, repeatMode: repeatMode, shuffle: shuffle))
     }
     public func handoff(fromNodeId: String, toNodeId: String) { wsClient.send(.handoff(fromNodeId: fromNodeId, toNodeId: toNodeId)) }
