@@ -166,7 +166,7 @@ client.disconnect()
 | `selectNode(_ String)` | Select output node by ID |
 | `localSessionStart(deviceName:deviceId:)` | Start a local playback session |
 | `localSessionStop()` | Stop the local playback session |
-| `localSessionUpdate(queue:currentIndex:positionSecs:status:volume:repeatMode:shuffle:)` | Update local session state |
+| `localSessionUpdate(queue:currentIndex:positionSecs:status:volume:repeatMode:shuffle:)` | Update local session state (`queue` is optional) |
 | `handoff(fromNodeId:toNodeId:)` | Hand off playback between nodes |
 
 **Observable State** (SwiftUI-ready)
