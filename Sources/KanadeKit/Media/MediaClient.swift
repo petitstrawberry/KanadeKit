@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 public final class MediaClient: @unchecked Sendable {
     private static let trackCacheDirectoryName = "kanade_tracks"
@@ -29,13 +30,26 @@ public final class MediaClient: @unchecked Sendable {
         let scheme = useTLS ? "https" : "http"
         let url = URL(string: "\(scheme)://\(host):\(port)")!
         let session: URLSession
-        if let tlsConfig = tlsConfiguration, let identity = tlsConfig.clientIdentity {
+        if let tlsConfig = tlsConfiguration,
+           tlsConfig.clientIdentity != nil
+            || tlsConfig.trustedCACertificates?.isEmpty == false
+            || tlsConfig.allowSelfSignedServer {
             let config = URLSessionConfiguration.default
             config.httpCookieStorage = nil
             config.httpShouldSetCookies = false
             config.urlCredentialStorage = nil
-            let credential = URLCredential(identity: identity, certificates: nil, persistence: .forSession)
-            session = URLSession(configuration: config, delegate: ClientCertDelegate(credential: credential), delegateQueue: nil)
+            let credential = tlsConfig.clientIdentity.map {
+                URLCredential(identity: $0, certificates: nil, persistence: .forSession)
+            }
+            session = URLSession(
+                configuration: config,
+                delegate: TLSURLSessionDelegate(
+                    clientCredential: credential,
+                    trustedCertificates: tlsConfig.trustedCACertificates ?? [],
+                    allowSelfSignedServer: tlsConfig.allowSelfSignedServer
+                ),
+                delegateQueue: nil
+            )
         } else {
             session = .shared
         }
@@ -354,18 +368,54 @@ public final class MediaClient: @unchecked Sendable {
     }
 }
 
-private final class ClientCertDelegate: NSObject, URLSessionDelegate, Sendable {
-    private let credential: URLCredential
+private final class TLSURLSessionDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
+    private let clientCredential: URLCredential?
+    private let trustedCertificates: [SecCertificate]
+    private let allowSelfSignedServer: Bool
 
-    init(credential: URLCredential) {
-        self.credential = credential
+    init(
+        clientCredential: URLCredential?,
+        trustedCertificates: [SecCertificate],
+        allowSelfSignedServer: Bool
+    ) {
+        self.clientCredential = clientCredential
+        self.trustedCertificates = trustedCertificates
+        self.allowSelfSignedServer = allowSelfSignedServer
     }
 
     func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodClientCertificate {
-            completionHandler(.useCredential, credential)
-        } else {
-            completionHandler(.performDefaultHandling, nil)
+            if let clientCredential {
+                completionHandler(.useCredential, clientCredential)
+            } else {
+                completionHandler(.performDefaultHandling, nil)
+            }
+            return
         }
+
+        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust {
+            guard let trust = challenge.protectionSpace.serverTrust else {
+                completionHandler(.cancelAuthenticationChallenge, nil)
+                return
+            }
+
+            if !trustedCertificates.isEmpty {
+                SecTrustSetAnchorCertificates(trust, trustedCertificates as CFArray)
+                SecTrustSetAnchorCertificatesOnly(trust, true)
+            } else if allowSelfSignedServer {
+                completionHandler(.cancelAuthenticationChallenge, nil)
+                return
+            }
+
+            var error: CFError?
+            if SecTrustEvaluateWithError(trust, &error) {
+                completionHandler(.useCredential, URLCredential(trust: trust))
+            } else {
+                completionHandler(.cancelAuthenticationChallenge, nil)
+            }
+            return
+        }
+
+        completionHandler(.performDefaultHandling, nil)
     }
 }
