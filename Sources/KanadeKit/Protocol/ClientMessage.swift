@@ -24,6 +24,8 @@ enum ClientMessage: Codable, Sendable, Equatable {
         case query
         case paths
         case playlistId = "playlist_id"
+        case offset
+        case limit
     }
 
     init(from decoder: Decoder) throws {
@@ -169,6 +171,10 @@ enum ClientMessage: Codable, Sendable, Equatable {
             case .getAlbumTracks(let albumId):
                 try container.encode("get_album_tracks", forKey: .req)
                 try container.encode(albumId, forKey: .albumId)
+            case .getTracks(let offset, let limit):
+                try container.encode("get_tracks", forKey: .req)
+                try container.encodeIfPresent(offset, forKey: .offset)
+                try container.encodeIfPresent(limit, forKey: .limit)
             case .getArtists:
                 try container.encode("get_artists", forKey: .req)
             case .getArtistAlbums(let artist):
