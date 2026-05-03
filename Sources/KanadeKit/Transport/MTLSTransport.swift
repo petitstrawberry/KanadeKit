@@ -88,7 +88,7 @@ final class MTLSTransport: Transport, @unchecked Sendable {
                     SecTrustSetAnchorCertificates(trust, trustedCerts as CFArray)
                     SecTrustSetAnchorCertificatesOnly(trust, true)
                 } else if allowSelfSigned {
-                    verify_complete(false)
+                    verify_complete(true)
                     return
                 }
 
